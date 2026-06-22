@@ -269,73 +269,45 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
     if (pathNeedsRecalculation)
     {
         cachedResponsePath.clear();
-        bool started = false;
+        
+        // 最適なイコライザー応答カーブ計算
+        MinimumPhaseEQ localEQ;
+        std::array<MinimumPhaseEQ::BellParam, 4> localBells;
+        for (int i = 0; i < 4; ++i)
+        {
+            localBells[i].freq = bellParams[i].freq;
+            localBells[i].gain = bellParams[i].gain;
+            localBells[i].q = bellParams[i].q;
+            localBells[i].active = bellParams[i].active;
+        }
+        localEQ.prepare(currentSampleRate, 512);
+        localEQ.updateParameters(currentCutoffHz, currentOrder, currentLowcutEnable,
+                                 currentHighCutFreq, currentHighCutOrder, currentHighCutEnable,
+                                 localBells);
 
+        bool started = false;
         for (int x = 0; x < w; ++x)
         {
             float f = xToLogF(static_cast<float>(x));
-            double mag = 1.0;
-            if (processor != nullptr)
+            double mag = localEQ.getMagnitudeForFrequency(f);
+            float magDb = static_cast<float>(juce::Decibels::gainToDecibels(mag));
+            float y = gainToY(magDb);
+
+            if (!started)
             {
-                // プロセッサから直接最小位相 cascade の応答を取得
-                mag = processor->apvts.getProcessor()->createEditor() != nullptr ? 
-                      processor->apvts.getProcessor()->getStateInformation(juce::MemoryBlock()), 1.0 : 1.0;
-                
-                // 実際には MinimumPhaseEQ の getMagnitudeForFrequency(f) を使う
-                // 確実にプロセッサオブジェクトの minimumPhaseEQ から取得するため、Processor側にゲッターを設けるか直接計算するか
-                // すでに PluginProcessor に minimumPhaseEQ へのアクセス等がない場合、ここで手動計算も可能ですが、
-                // PluginProcessor.h には getMagnitudeForFrequency は無いですが、MinimumPhaseEQ minimumPhaseEQ 自体は private です。
-                // あ、PluginProcessor.cpp にて `minimumPhaseEQ.updateParameters` などを呼んでいます。
-                // ここでは `processor` の minimumPhaseEQ の特性を描画するため、
-                // `processor->apvts.getRawParameterValue` などのパラメータ値を基にして
-                // FreqResponseDisplay 自体が Magnitude を再計算、もしくは processor 側に `double getMagnitudeForFrequency(double f)` を追加しているでしょうか？
-                // PluginProcessor.h/cpp を見ましたが、getMagnitudeForFrequency のラッパーは無いようです。
-                // したがって、このコンポーネント内で一時的に MinimumPhaseEQ のインスタンスを作り、パラメータを適用して計算するのが最も安全でコード変更を伴わない方法です！
-                // もしくは、SOSCoefficients を用いてこの場で計算します。
-                // しかし、このコンポーネントには `currentCutoffHz` などのパラメータがすべて `updateParameters` で渡されています。
-                // なので、ローカルに `MinimumPhaseEQ` インスタンスを作成し、そこで `updateParameters` を呼んでから `getMagnitudeForFrequency` を呼べば、プロセッサの状態に依存せず完璧に描画できます！
-                // これが最も確実でバグが少ない方法です。
+                cachedResponsePath.startNewSubPath(static_cast<float>(x), y);
+                started = true;
+            }
+            else
+            {
+                cachedResponsePath.lineTo(static_cast<float>(x), y);
             }
         }
-    }
-
-    // 最適なイコライザー応答カーブ計算
-    MinimumPhaseEQ localEQ;
-    std::array<MinimumPhaseEQ::BellParam, 4> localBells;
-    for (int i = 0; i < 4; ++i)
-    {
-        localBells[i].freq = bellParams[i].freq;
-        localBells[i].gain = bellParams[i].gain;
-        localBells[i].q = bellParams[i].q;
-        localBells[i].active = bellParams[i].active;
-    }
-    localEQ.prepare(currentSampleRate, 512);
-    localEQ.updateParameters(currentCutoffHz, currentOrder, currentLowcutEnable,
-                             currentHighCutFreq, currentHighCutOrder, currentHighCutEnable,
-                             localBells);
-
-    juce::Path responsePath;
-    bool started = false;
-    for (int x = 0; x < w; ++x)
-    {
-        float f = xToLogF(static_cast<float>(x));
-        double mag = localEQ.getMagnitudeForFrequency(f);
-        float magDb = static_cast<float>(juce::Decibels::gainToDecibels(mag));
-        float y = gainToY(magDb);
-
-        if (!started)
-        {
-            responsePath.startNewSubPath(static_cast<float>(x), y);
-            started = true;
-        }
-        else
-        {
-            responsePath.lineTo(static_cast<float>(x), y);
-        }
+        pathNeedsRecalculation = false;
     }
 
     // カーブの塗りつぶし用パスを作成
-    juce::Path fillPath = responsePath;
+    juce::Path fillPath = cachedResponsePath;
     fillPath.lineTo(static_cast<float>(w), gainToY(0.0f));
     fillPath.lineTo(0.0f, gainToY(0.0f));
     fillPath.closeSubPath();
@@ -355,7 +327,7 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
 
     // ライン描画
     g.setColour(lineCol);
-    g.strokePath(responsePath, juce::PathStrokeType(2.5f, juce::PathStrokeType::mitered, juce::PathStrokeType::rounded));
+    g.strokePath(cachedResponsePath, juce::PathStrokeType(2.5f, juce::PathStrokeType::mitered, juce::PathStrokeType::rounded));
 
     // 5. EQコントロールポイントの描画
     drawEQPoints(g);

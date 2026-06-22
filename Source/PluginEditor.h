@@ -45,6 +45,9 @@ public:
 class HighPrecisionEQAudioProcessorEditor : public juce::AudioProcessorEditor
 {
 public:
+    friend class FreqResponseDisplay;
+    friend class PhaseDisplay;
+
     explicit HighPrecisionEQAudioProcessorEditor(HighPrecisionEQAudioProcessor&);
     ~HighPrecisionEQAudioProcessorEditor() override;
 

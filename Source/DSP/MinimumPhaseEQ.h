@@ -220,7 +220,7 @@ private:
     static constexpr size_t MaxSections = 12;
     std::vector<FilterSection> activeSections;
     std::vector<FilterSection> pendingSections;
-    std::vector<FilterSection> targetBells;
+    std::vector<BellParam> targetBells;
 
     bool parametersNeedUpdate = false;
     juce::CriticalSection lock;

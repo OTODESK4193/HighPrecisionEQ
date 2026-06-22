@@ -23,6 +23,7 @@ public:
     std::vector<float> getEnergies(); // Returns dB values for GUI
 
     std::vector<float> getDetailedSpectrum(double fmin, double fmax, int numPoints);
+    bool hasNewData() { return newDataFlag.exchange(false); }
 
     void run() override;
 
@@ -54,4 +55,5 @@ private:
 
     double Q_process = 1e-4;
     double R_measure = 2.0;
+    std::atomic<bool> newDataFlag{ false };
 };

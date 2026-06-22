@@ -18,7 +18,7 @@ void MinimumPhaseEQ::prepare(double sampleRate, int maxBlockSize)
 
 void MinimumPhaseEQ::reset()
 {
-    const juce::SpinLock::ScopedLockType sl(lock);
+    const juce::CriticalSection::ScopedLockType sl(lock);
     for (auto& sec : activeSections)
         sec.reset();
     for (auto& sec : pendingSections)
@@ -29,7 +29,7 @@ void MinimumPhaseEQ::updateParameters(double lowCutFreq, int lowCutOrder, bool l
                                       double highCutFreq, int highCutOrder, bool highCutEnable,
                                       const std::array<BellParam, 4>& bells)
 {
-    const juce::SpinLock::ScopedLockType sl(lock);
+    const juce::CriticalSection::ScopedLockType sl(lock);
 
     for (size_t i = 0; i < 4; ++i)
     {
@@ -153,7 +153,7 @@ void MinimumPhaseEQ::updateParameters(double lowCutFreq, int lowCutOrder, bool l
 void MinimumPhaseEQ::process(juce::AudioBuffer<float>& buffer)
 {
     {
-        const juce::SpinLock::ScopedTryLockType sl(lock);
+        const juce::CriticalSection::ScopedTryLockType sl(lock);
         if (parametersNeedUpdate)
         {
             activeSections = pendingSections;
