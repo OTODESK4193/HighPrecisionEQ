@@ -14,9 +14,14 @@ PhaseDisplay::~PhaseDisplay()
 
 void PhaseDisplay::vblankUpdate()
 {
-    if (analyzer != nullptr && analyzer->hasNewData())
+    if (analyzer != nullptr)
     {
-        repaint();
+        uint64_t currentCount = analyzer->getUpdateCount();
+        if (lastSeenUpdateCount != currentCount)
+        {
+            lastSeenUpdateCount = currentCount;
+            repaint();
+        }
     }
 }
 

@@ -116,7 +116,7 @@ void AnalyzerDSP::processInternal(const float* data, int numSamples)
     }
 
     applyBayesianSmoothing(rawSpectrum);
-    newDataFlag.store(true);
+    updateCount.fetch_add(1, std::memory_order_release);
 }
 
 void AnalyzerDSP::calculateBurgAR(const float* data, int N, std::vector<double>& arCoeffs, double& variance)

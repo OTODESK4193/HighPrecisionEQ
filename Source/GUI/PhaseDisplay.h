@@ -42,6 +42,7 @@ private:
 
     int currentPaletteIdx = 0;
     float phaseZoomFactor = 1.0f;
+    uint64_t lastSeenUpdateCount = 0;
 
     void drawPhaseCurve(juce::Graphics& g, juce::Rectangle<int> bounds, juce::Colour color);
     void drawAnalyzerSpectrum(juce::Graphics& g, juce::Rectangle<int> bounds);
