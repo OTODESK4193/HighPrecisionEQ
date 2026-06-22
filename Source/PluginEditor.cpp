@@ -89,6 +89,8 @@ HighPrecisionEQAudioProcessorEditor::HighPrecisionEQAudioProcessorEditor(HighPre
         phaseDisplay.updateParameters(lcCutoff, lcOrder, lcGain, lcEnable,
                                       hcFreq, hcOrder, hcEnable,
                                       processorRef.getSampleRate(), bells);
+
+        updateComponentColors();
     };
 
     cutoffSlider.onValueChange = updateGraph;

@@ -58,15 +58,24 @@ void AnalyzerDSP::pushAudio(const float* data, int numSamples)
 
 void AnalyzerDSP::run()
 {
+    const int analysisSize = 2048;
+    const int hopSize = 512; // 512サンプル (約11.6ms) ごとに最新の2048サンプルを解析する
+    
     while (!threadShouldExit())
     {
-        wait(30);
+        wait(10); // 短めのウェイトにして俊敏な更新を可能にする
 
         int currentWrite = writePos.load(std::memory_order_acquire);
         int available = currentWrite - readPos;
-        const int analysisSize = 2048;
 
-        if (available >= analysisSize)
+        // リングバッファのオーバーフローガード
+        if (available > BufferSize)
+        {
+            readPos = currentWrite - analysisSize;
+            available = analysisSize;
+        }
+
+        if (available >= hopSize)
         {
             int startReadPos = currentWrite - analysisSize;
             localBuf.resize(static_cast<size_t>(analysisSize));
@@ -75,7 +84,9 @@ void AnalyzerDSP::run()
             {
                 localBuf[static_cast<size_t>(i)] = ringBuffer[(startReadPos + i) & BufferMask];
             }
-            readPos = currentWrite;
+            
+            // 進捗を hopSize 単位で更新する
+            readPos += (available / hopSize) * hopSize;
 
             processInternal(localBuf.data(), analysisSize);
         }
@@ -208,14 +219,28 @@ void AnalyzerDSP::calculateBurgAR(const float* data, int N, std::vector<double>&
 double AnalyzerDSP::calculateARSpectrumValue(double f, const std::vector<double>& arCoeffs, double variance) const
 {
     double w = 2.0 * std::numbers::pi * f / sampleRate;
+    double cos_w = std::cos(w);
+    double sin_w = std::sin(w);
+
     double re = 1.0;
     double im = 0.0;
 
-    for (int k = 0; k < AR_ORDER; ++k)
+    // z^(k+1) = e^(-i*w*(k+1)) の逐次計算用変数
+    double z_re = cos_w;
+    double z_im = -sin_w;
+
+    const int order = static_cast<int>(arCoeffs.size());
+    for (int k = 0; k < order; ++k)
     {
-        double phase = w * (k + 1);
-        re += arCoeffs[static_cast<size_t>(k)] * std::cos(phase);
-        im -= arCoeffs[static_cast<size_t>(k)] * std::sin(phase);
+        double ak = arCoeffs[static_cast<size_t>(k)];
+        re += ak * z_re;
+        im += ak * z_im;
+
+        // 複素乗算による z^(k+2) の更新: (z_re + i*z_im) * (cos_w - i*sin_w)
+        double next_z_re = z_re * cos_w + z_im * sin_w;
+        double next_z_im = z_im * cos_w - z_re * sin_w;
+        z_re = next_z_re;
+        z_im = next_z_im;
     }
 
     double magSq = re * re + im * im;

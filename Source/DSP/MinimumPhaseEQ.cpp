@@ -272,8 +272,10 @@ void MinimumPhaseEQ::process(juce::AudioBuffer<float>& buffer)
 
 double MinimumPhaseEQ::getMagnitudeForFrequency(double freq) const
 {
+    const juce::CriticalSection::ScopedLockType sl(lock);
     double mag = 1.0;
-    for (const auto& sec : activeSections)
+    // UI表示用などには、プロセススレッドの駆動状態に関わらず最新のパラメータであるpendingSectionsを参照する
+    for (const auto& sec : pendingSections)
     {
         if (sec.active && sec.type != FilterSection::Type::Bypass)
         {

@@ -42,7 +42,7 @@ private:
 
     double sampleRate = 44100.0;
     
-    static constexpr int AR_ORDER = 128;
+    static constexpr int AR_ORDER = 48;
     
     std::vector<double> currentARCoeffs;
     double currentVariance = 1e-6;

@@ -468,20 +468,45 @@ void FreqResponseDisplay::mouseDrag(const juce::MouseEvent& e)
     float dragFreq = xToLogF(mouseX);
     float dragGain = yToGain(mouseY);
 
-    if (activeDragBand == 0) // LowCut
+    if (processor != nullptr)
     {
-        // 周波数とゲインをスライダー経由で同期
-        editor->cutoffSlider.setValue(std::clamp(dragFreq, 20.0f, 500.0f));
-        editor->gainSlider.setValue(std::clamp(dragGain, -10.0f, 0.0f));
-    }
-    else if (activeDragBand == 1) // HighCut
-    {
-        editor->cutoffSlider.setValue(std::clamp(dragFreq, 20.0f, 20000.0f));
-    }
-    else if (activeDragBand >= 2 && activeDragBand <= 5) // Bells
-    {
-        editor->cutoffSlider.setValue(std::clamp(dragFreq, 20.0f, 20000.0f));
-        editor->gainSlider.setValue(std::clamp(dragGain, -18.0f, 18.0f));
+        auto& apvts = processor->apvts;
+
+        if (activeDragBand == 0) // LowCut
+        {
+            float targetFreq = std::clamp(dragFreq, 20.0f, 500.0f);
+            float targetGain = std::clamp(dragGain, -10.0f, 0.0f);
+
+            auto rangeF = apvts.getParameterRange("cutoffHz");
+            apvts.getParameter("cutoffHz")->setValueNotifyingHost(rangeF.convertTo0to1(targetFreq));
+
+            auto rangeG = apvts.getParameterRange("gainDb");
+            apvts.getParameter("gainDb")->setValueNotifyingHost(rangeG.convertTo0to1(targetGain));
+        }
+        else if (activeDragBand == 1) // HighCut
+        {
+            float targetFreq = std::clamp(dragFreq, 20.0f, 20000.0f);
+
+            auto rangeF = apvts.getParameterRange("highcut_freq");
+            apvts.getParameter("highcut_freq")->setValueNotifyingHost(rangeF.convertTo0to1(targetFreq));
+        }
+        else if (activeDragBand >= 2 && activeDragBand <= 5) // Bells
+        {
+            int idx = activeDragBand - 1; // Bell1..4 (1-indexed suffix: 1..4)
+            juce::String idSuffix = juce::String(idx);
+            
+            float targetFreq = std::clamp(dragFreq, 20.0f, 20000.0f);
+            float targetGain = std::clamp(dragGain, -18.0f, 18.0f);
+
+            juce::String freqID = "bell_freq_" + idSuffix;
+            juce::String gainID = "bell_gain_" + idSuffix;
+
+            auto rangeF = apvts.getParameterRange(freqID);
+            apvts.getParameter(freqID)->setValueNotifyingHost(rangeF.convertTo0to1(targetFreq));
+
+            auto rangeG = apvts.getParameterRange(gainID);
+            apvts.getParameter(gainID)->setValueNotifyingHost(rangeG.convertTo0to1(targetGain));
+        }
     }
     else
     {
@@ -539,16 +564,52 @@ void FreqResponseDisplay::mouseDoubleClick(const juce::MouseEvent&)
     repaint();
 }
 
-void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails& wheel)
+void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel)
 {
-    if (editor == nullptr) return;
+    if (processor == nullptr) return;
+    auto& apvts = processor->apvts;
 
-    // 現在選択されているバンドのQ値をマウスホイールで増減
-    if (selectedBandIdx >= 2 && selectedBandIdx <= 5)
+    // 選択されているバンドに応じてQ値やスロープ値を調整
+    int targetBand = selectedBandIdx;
+
+    if (targetBand == 0) // LowCut
     {
-        double currentQ = editor->qSlider.getValue();
-        double multiplier = std::pow(1.1, wheel.deltaY);
-        editor->qSlider.setValue(std::clamp(currentQ * multiplier, 0.1, 120.0));
+        juce::String slopeID = "slopeDbOct";
+        float currentSlope = apvts.getRawParameterValue(slopeID)->load();
+        float direction = (wheel.deltaY > 0.0f) ? 12.0f : -12.0f;
+        float newSlope = currentSlope + direction;
+        
+        auto rangeS = apvts.getParameterRange(slopeID);
+        newSlope = std::clamp(newSlope, rangeS.start, rangeS.end);
+        
+        apvts.getParameter(slopeID)->setValueNotifyingHost(rangeS.convertTo0to1(newSlope));
+    }
+    else if (targetBand == 1) // HighCut
+    {
+        juce::String slopeID = "highcut_slope";
+        float currentSlope = apvts.getRawParameterValue(slopeID)->load();
+        float direction = (wheel.deltaY > 0.0f) ? 12.0f : -12.0f;
+        float newSlope = currentSlope + direction;
+        
+        auto rangeS = apvts.getParameterRange(slopeID);
+        newSlope = std::clamp(newSlope, rangeS.start, rangeS.end);
+        
+        apvts.getParameter(slopeID)->setValueNotifyingHost(rangeS.convertTo0to1(newSlope));
+    }
+    else if (targetBand >= 2 && targetBand <= 5) // Bells
+    {
+        int idx = targetBand - 1; // Bell1..4 (1..4)
+        juce::String idSuffix = juce::String(idx);
+        juce::String qID = "bell_q_" + idSuffix;
+        
+        float currentQ = apvts.getRawParameterValue(qID)->load();
+        float multiplier = std::pow(1.15f, wheel.deltaY * 2.0f);
+        float newQ = currentQ * multiplier;
+        
+        auto rangeQ = apvts.getParameterRange(qID);
+        newQ = std::clamp(newQ, rangeQ.start, rangeQ.end);
+        
+        apvts.getParameter(qID)->setValueNotifyingHost(rangeQ.convertTo0to1(newQ));
     }
 }
 
