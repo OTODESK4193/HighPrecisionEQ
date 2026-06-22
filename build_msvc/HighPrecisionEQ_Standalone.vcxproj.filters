@@ -1,0 +1,45 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\JUCE\modules\juce_audio_plugin_client\juce_audio_plugin_client_AAX.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\JUCE\modules\juce_audio_plugin_client\juce_audio_plugin_client_AAX_utils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\JUCE\modules\juce_audio_plugin_client\juce_audio_plugin_client_ARA.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\JUCE\modules\juce_audio_plugin_client\juce_audio_plugin_client_LV2.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\JUCE\modules\juce_audio_plugin_client\juce_audio_plugin_client_Standalone.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\JUCE\modules\juce_audio_plugin_client\juce_audio_plugin_client_Unity.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\JUCE\modules\juce_audio_plugin_client\juce_audio_plugin_client_VST2.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\JUCE\modules\juce_audio_plugin_client\juce_audio_plugin_client_VST3.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="D:\VST_Project\HighPrecisionEQ\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Object Include="D:\VST_Project\HighPrecisionEQ\build_msvc\HighPrecisionEQ_rc_lib.dir\$(Configuration)\HighPrecisionEQ_resources.res">
+      <Filter>Object Libraries</Filter>
+    </Object>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Object Libraries">
+      <UniqueIdentifier>{2A773B4F-6237-3F19-8169-EE131F6E73D5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{1874B335-735E-3FD3-AF17-A3FE301D4F25}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

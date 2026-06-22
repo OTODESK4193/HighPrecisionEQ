@@ -53,8 +53,8 @@ HighPrecisionEQAudioProcessorEditor::HighPrecisionEQAudioProcessorEditor(HighPre
         bandButtons[i].onClick = [this, i]() { selectBand(static_cast<SelectedBand>(i)); };
         addAndMakeVisible(bandButtons[i]);
         
-        enableButtons[i].setButtonText("ON");
         enableButtons[i].setClickingTogglesState(true);
+        enableButtons[i].onStateChange = [this]() { updateComponentColors(); };
         addAndMakeVisible(enableButtons[i]);
     }
 
@@ -377,7 +377,24 @@ void HighPrecisionEQAudioProcessorEditor::updateComponentColors()
     {
         bandButtons[i].setColour(juce::TextButton::buttonOnColourId, bandColors[i].withAlpha(0.6f));
         bandButtons[i].setColour(juce::TextButton::textColourOffId, pal.text);
-        enableButtons[i].setColour(juce::TextButton::textColourOffId, pal.text);
+        
+        bool isON = enableButtons[i].getToggleState();
+        enableButtons[i].setButtonText(isON ? "ON" : "OFF");
+        
+        if (isON)
+        {
+            enableButtons[i].setColour(juce::TextButton::buttonColourId, bandColors[i].withAlpha(0.8f));
+            enableButtons[i].setColour(juce::TextButton::buttonOnColourId, bandColors[i]);
+            enableButtons[i].setColour(juce::TextButton::textColourOnId, juce::Colours::black);
+            enableButtons[i].setColour(juce::TextButton::textColourOffId, juce::Colours::black);
+        }
+        else
+        {
+            enableButtons[i].setColour(juce::TextButton::buttonColourId, juce::Colour(0xff20202a));
+            enableButtons[i].setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff20202a));
+            enableButtons[i].setColour(juce::TextButton::textColourOnId, pal.text.withAlpha(0.3f));
+            enableButtons[i].setColour(juce::TextButton::textColourOffId, pal.text.withAlpha(0.3f));
+        }
     }
     
     analyzeButton.setColour(juce::TextButton::textColourOffId, pal.text);

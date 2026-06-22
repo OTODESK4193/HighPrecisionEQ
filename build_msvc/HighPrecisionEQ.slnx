@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Solution>
+	<Configurations>
+		<BuildType Name="Debug"/>
+		<BuildType Name="Release"/>
+		<BuildType Name="MinSizeRel"/>
+		<BuildType Name="RelWithDebInfo"/>
+		<Platform Name="x64"/>
+	</Configurations>
+	<Project Path="HighPrecisionEQData.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="b1d5469d-ce16-3214-b30e-b3176519466f">
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+	</Project>
+	<Project Path="HighPrecisionEQ_rc_lib.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="7f93db86-b370-3bcc-b0ea-a52f10e87d09">
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+	</Project>
+	<Folder Name="/CMakePredefinedTargets/">
+		<Project Path="ALL_BUILD.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="c9c68542-3c43-33ae-bbde-f34673ed9eac" DefaultStartup="true">
+			<BuildDependency Project="HighPrecisionEQ.vcxproj"/>
+			<BuildDependency Project="HighPrecisionEQData.vcxproj"/>
+			<BuildDependency Project="HighPrecisionEQ_Standalone.vcxproj"/>
+			<BuildDependency Project="HighPrecisionEQ_VST3.vcxproj"/>
+			<BuildDependency Project="HighPrecisionEQ_rc_lib.vcxproj"/>
+			<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+		</Project>
+		<Project Path="INSTALL.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="d5a94698-3ff1-378b-b89b-aa4081bf18cb">
+			<BuildDependency Project="ALL_BUILD.vcxproj"/>
+			<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+			<Build Solution="Debug|*" Project="false"/>
+			<Build Solution="Release|*" Project="false"/>
+			<Build Solution="MinSizeRel|*" Project="false"/>
+			<Build Solution="RelWithDebInfo|*" Project="false"/>
+		</Project>
+		<Project Path="ZERO_CHECK.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="430dcae8-d0ad-3ba7-944d-c0cc093cc08f"/>
+	</Folder>
+	<Folder Name="/HighPrecisionEQ/">
+		<Project Path="HighPrecisionEQ.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="37843668-e4eb-3918-98e2-207d4de6df38">
+			<BuildDependency Project="HighPrecisionEQData.vcxproj"/>
+			<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+		</Project>
+		<Project Path="HighPrecisionEQ_All.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="124f642d-a58c-3f76-9475-f9657e146ba7">
+			<BuildDependency Project="HighPrecisionEQ_Standalone.vcxproj"/>
+			<BuildDependency Project="HighPrecisionEQ_VST3.vcxproj"/>
+			<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+			<Build Solution="Debug|*" Project="false"/>
+			<Build Solution="Release|*" Project="false"/>
+			<Build Solution="MinSizeRel|*" Project="false"/>
+			<Build Solution="RelWithDebInfo|*" Project="false"/>
+		</Project>
+		<Project Path="HighPrecisionEQ_Standalone.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="bfe5650c-3e18-373a-ada4-19b253eb0d54">
+			<BuildDependency Project="HighPrecisionEQ.vcxproj"/>
+			<BuildDependency Project="HighPrecisionEQData.vcxproj"/>
+			<BuildDependency Project="HighPrecisionEQ_rc_lib.vcxproj"/>
+			<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+		</Project>
+		<Project Path="HighPrecisionEQ_VST3.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="3239d610-1ddf-3102-bdee-eb44d2dbdbfd">
+			<BuildDependency Project="HighPrecisionEQ.vcxproj"/>
+			<BuildDependency Project="HighPrecisionEQData.vcxproj"/>
+			<BuildDependency Project="HighPrecisionEQ_rc_lib.vcxproj"/>
+			<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+		</Project>
+	</Folder>
+</Solution>

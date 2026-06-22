@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="D:\VST_Project\HighPrecisionEQ\build_msvc\CMakeFiles\1ff99f6cdd7d2fe4bbf2a5f3f47bd607\HighPrecisionEQ_resources.rc.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="D:\VST_Project\HighPrecisionEQ\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="D:\VST_Project\HighPrecisionEQ\build_msvc\HighPrecisionEQ_artefacts\JuceLibraryCode\HighPrecisionEQ_resources.rc">
+      <Filter>Source Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{BAFD6000-3FA0-3719-95A9-D0DAA3FE6BFE}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{1874B335-735E-3FD3-AF17-A3FE301D4F25}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

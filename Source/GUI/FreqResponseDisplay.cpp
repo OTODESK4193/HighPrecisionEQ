@@ -148,26 +148,26 @@ float FreqResponseDisplay::logFToX(float f) const
     float logMin = std::log10(currentMinF);
     float logMax = std::log10(currentMaxF);
     float val = (std::log10(f) - logMin) / (logMax - logMin);
-    return static_cast<float>(getX()) + val * static_cast<float>(getWidth());
+    return val * static_cast<float>(getWidth());
 }
 
 float FreqResponseDisplay::xToLogF(float x) const
 {
     float logMin = std::log10(currentMinF);
     float logMax = std::log10(currentMaxF);
-    float val = (x - static_cast<float>(getX())) / static_cast<float>(getWidth());
+    float val = x / static_cast<float>(getWidth());
     return std::pow(10.0f, logMin + val * (logMax - logMin));
 }
 
 float FreqResponseDisplay::gainToY(float gainDecibels) const
 {
     float val = (gainDecibels - currentMinDb) / (currentMaxDb - currentMinDb);
-    return static_cast<float>(getY()) + (1.0f - val) * static_cast<float>(getHeight());
+    return (1.0f - val) * static_cast<float>(getHeight());
 }
 
 float FreqResponseDisplay::yToGain(float y) const
 {
-    float val = (y - static_cast<float>(getY())) / static_cast<float>(getHeight());
+    float val = y / static_cast<float>(getHeight());
     return currentMinDb + (1.0f - val) * (currentMaxDb - currentMinDb);
 }
 
@@ -177,7 +177,7 @@ float FreqResponseDisplay::analyzerGainToY(float gainDecibels) const
     float minDb = -70.0f + analyzerGainOffsetDb;
     float maxDb = 10.0f + analyzerGainOffsetDb;
     float val = (gainDecibels - minDb) / (maxDb - minDb);
-    return static_cast<float>(getY()) + (1.0f - val) * static_cast<float>(getHeight());
+    return (1.0f - val) * static_cast<float>(getHeight());
 }
 
 void FreqResponseDisplay::paint(juce::Graphics& g)

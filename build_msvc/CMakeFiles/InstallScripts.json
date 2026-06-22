@@ -1,0 +1,11 @@
+{
+	"InstallScripts" : 
+	[
+		"D:/VST_Project/HighPrecisionEQ/build_msvc/cmake_install.cmake",
+		"D:/VST_Project/HighPrecisionEQ/build_msvc/JUCE/cmake_install.cmake",
+		"D:/VST_Project/HighPrecisionEQ/build_msvc/JUCE/modules/cmake_install.cmake",
+		"D:/VST_Project/HighPrecisionEQ/build_msvc/JUCE/extras/Build/cmake_install.cmake",
+		"D:/VST_Project/HighPrecisionEQ/build_msvc/JUCE/extras/Build/juceaide/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

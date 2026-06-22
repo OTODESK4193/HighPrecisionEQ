@@ -1,0 +1,7 @@
+D:/VST_Project/HighPrecisionEQ/build_msvc/JUCE/tools/CMakeFiles/INSTALL.dir
+D:/VST_Project/HighPrecisionEQ/build_msvc/JUCE/tools/CMakeFiles/ALL_BUILD.dir
+D:/VST_Project/HighPrecisionEQ/build_msvc/JUCE/tools/CMakeFiles/ZERO_CHECK.dir
+D:/VST_Project/HighPrecisionEQ/build_msvc/JUCE/tools/modules/CMakeFiles/INSTALL.dir
+D:/VST_Project/HighPrecisionEQ/build_msvc/JUCE/tools/extras/Build/CMakeFiles/INSTALL.dir
+D:/VST_Project/HighPrecisionEQ/build_msvc/JUCE/tools/extras/Build/juceaide/CMakeFiles/juceaide.dir
+D:/VST_Project/HighPrecisionEQ/build_msvc/JUCE/tools/extras/Build/juceaide/CMakeFiles/INSTALL.dir
