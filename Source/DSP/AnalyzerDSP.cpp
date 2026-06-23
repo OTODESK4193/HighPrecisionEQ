@@ -17,7 +17,9 @@ AnalyzerDSP::AnalyzerDSP()
 
 AnalyzerDSP::~AnalyzerDSP()
 {
-    stopThread(2000);
+    signalThreadShouldExit();
+    notify();
+    stopThread(3000);
 }
 
 void AnalyzerDSP::prepare(double newSampleRate)
@@ -65,6 +67,9 @@ void AnalyzerDSP::run()
     {
         wait(10); // 短めのウェイトにして俊敏な更新を可能にする
 
+        if (threadShouldExit())
+            break;
+
         int currentWrite = writePos.load(std::memory_order_acquire);
         int available = currentWrite - readPos;
 
@@ -77,6 +82,9 @@ void AnalyzerDSP::run()
 
         if (available >= hopSize)
         {
+            if (threadShouldExit())
+                break;
+
             int startReadPos = currentWrite - analysisSize;
             localBuf.resize(static_cast<size_t>(analysisSize));
             
@@ -87,6 +95,9 @@ void AnalyzerDSP::run()
             
             // 進捗を hopSize 単位で更新する
             readPos += (available / hopSize) * hopSize;
+
+            if (threadShouldExit())
+                break;
 
             processInternal(localBuf.data(), analysisSize);
         }

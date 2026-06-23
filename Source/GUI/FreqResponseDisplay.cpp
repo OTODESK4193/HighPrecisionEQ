@@ -192,6 +192,16 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
     // 背景
     g.fillAll(juce::Colour(0xff0d0d15));
 
+    if (processor != nullptr)
+    {
+        double psr = processor->getSampleRate();
+        if (psr > 8000.0 && std::abs(currentSampleRate - psr) > 0.01)
+        {
+            currentSampleRate = psr;
+            pathNeedsRecalculation = true;
+        }
+    }
+
     int w = getWidth();
     int h = getHeight();
 
@@ -234,45 +244,52 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
         std::vector<float> magnitudes = analyzer->getDetailedSpectrum(currentMinF, currentMaxF, w);
 
         juce::Path analyzerPath;
+        juce::Path strokePath;
         bool started = false;
         
         for (int i = 0; i < w; ++i)
         {
             float magDb = magnitudes[static_cast<size_t>(i)];
             float y = analyzerGainToY(magDb);
+            y = std::clamp(y, 0.0f, static_cast<float>(h));
             
             if (!started)
             {
-                analyzerPath.startNewSubPath(static_cast<float>(i), y);
+                analyzerPath.startNewSubPath(static_cast<float>(i), static_cast<float>(h));
+                analyzerPath.lineTo(static_cast<float>(i), y);
+                strokePath.startNewSubPath(static_cast<float>(i), y);
                 started = true;
             }
             else
             {
                 analyzerPath.lineTo(static_cast<float>(i), y);
+                strokePath.lineTo(static_cast<float>(i), y);
             }
         }
 
         if (started)
         {
-            // ベイズ平滑化による美しい残響・ホールド表示
-            g.setColour(pal.lowcut.withAlpha(0.12f));
-            g.strokePath(analyzerPath, juce::PathStrokeType(1.5f));
-            
-            // 下部を閉じてグラデーションで塗りつぶす
             analyzerPath.lineTo(static_cast<float>(w), static_cast<float>(h));
-            analyzerPath.lineTo(0.0f, static_cast<float>(h));
             analyzerPath.closeSubPath();
             
-            juce::ColourGradient fillGrad(pal.lowcut.withAlpha(0.04f), 0.0f, static_cast<float>(h * 0.4f),
-                                          juce::Colours::transparentBlack, 0.0f, static_cast<float>(h), false);
+            juce::ColourGradient fillGrad(pal.anaFill, 0.0f, 0.0f,
+                                          pal.anaFill.withAlpha(0.0f), 0.0f, static_cast<float>(h), false);
             g.setGradientFill(fillGrad);
             g.fillPath(analyzerPath);
+
+            g.setColour(pal.anaStroke);
+            g.strokePath(strokePath, juce::PathStrokeType(1.2f));
         }
     }
 
     // 4. EQ特性カーブの再計算と描画
-    if (pathNeedsRecalculation)
+    if (pathNeedsRecalculation || cachedResponsePath.isEmpty())
     {
+        if (precomputedFreqs.size() < static_cast<size_t>(w + 1))
+        {
+            precomputeFrequencies();
+        }
+
         cachedResponsePath.clear();
         
         // 最適なイコライザー応答カーブ計算
@@ -308,6 +325,96 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
                 cachedResponsePath.lineTo(static_cast<float>(x), y);
             }
         }
+
+        // --- SampleChordと同等のColorロジック (横方向マルチカラーグラデーションの計算) ---
+        cachedLineGrad = juce::ColourGradient(juce::Colours::transparentBlack, 0.0f, 0.0f,
+                                              juce::Colours::transparentBlack, static_cast<float>(w), 0.0f, false);
+        cachedFillGrad = juce::ColourGradient(juce::Colours::transparentBlack, 0.0f, 0.0f,
+                                              juce::Colours::transparentBlack, static_cast<float>(w), 0.0f, false);
+
+        juce::Colour bellColors[4] = { pal.bell1, pal.bell2, pal.bell3, pal.bell4 };
+        juce::Colour lowcutColor = pal.lowcut;
+
+        int numPoints = 100;
+        for (int i = 0; i <= numPoints; ++i)
+        {
+            float proportion = static_cast<float>(i) / numPoints;
+            float targetX = proportion * static_cast<float>(w);
+            float f = xToLogF(targetX);
+            
+            double w_rad = 2.0 * std::numbers::pi * f / currentSampleRate;
+            double cw = std::cos(w_rad);
+            double sw = std::sin(w_rad);
+            double cw2 = std::cos(2.0 * w_rad);
+            double sw2 = std::sin(2.0 * w_rad);
+            
+            double w_sum = 0.0;
+            double r_sum = 0.0, g_sum = 0.0, b_sum = 0.0;
+            
+            for (int bIdx = 0; bIdx < 4; ++bIdx)
+            {
+                if (localBells[bIdx].active && std::abs(localBells[bIdx].gain) > 0.01)
+                {
+                    double A = std::pow(10.0, localBells[bIdx].gain / 40.0);
+                    double w0 = 2.0 * std::numbers::pi * localBells[bIdx].freq / currentSampleRate;
+                    double alpha = std::sin(w0) / (2.0 * localBells[bIdx].q);
+                    
+                    double a0 = 1.0 + alpha / A;
+                    double b0 = (1.0 + alpha * A) / a0;
+                    double b1 = (-2.0 * std::cos(w0)) / a0;
+                    double b2 = (1.0 - alpha * A) / a0;
+                    double a1 = (-2.0 * std::cos(w0)) / a0;
+                    double a2 = (1.0 - alpha / A) / a0;
+                    
+                    double numRe = b0 + b1 * cw + b2 * cw2;
+                    double numIm = -b1 * sw - b2 * sw2;
+                    double numMagSq = numRe * numRe + numIm * numIm;
+                    
+                    double denRe = 1.0 + a1 * cw + a2 * cw2;
+                    double denIm = -a1 * sw - a2 * sw2;
+                    double denMagSq = denRe * denRe + denIm * denIm;
+                    
+                    double bellMag = 1.0;
+                    if (denMagSq > 0.0) {
+                        bellMag = std::sqrt(numMagSq / denMagSq);
+                    }
+                    
+                    double attenuationDb = -20.0 * std::log10(std::max(bellMag, 1e-5));
+                    double diffDb = std::abs(attenuationDb);
+                    if (diffDb > 0.1)
+                    {
+                        w_sum += diffDb;
+                        r_sum += diffDb * bellColors[bIdx].getRed();
+                        g_sum += diffDb * bellColors[bIdx].getGreen();
+                        b_sum += diffDb * bellColors[bIdx].getBlue();
+                    }
+                }
+            }
+            
+            juce::Colour finalColor;
+            if (w_sum > 0.0)
+            {
+                double r_blend = r_sum / w_sum;
+                double g_blend = g_sum / w_sum;
+                double b_blend = b_sum / w_sum;
+                juce::Colour blendedBellColor = juce::Colour(
+                    static_cast<juce::uint8>(r_blend),
+                    static_cast<juce::uint8>(g_blend),
+                    static_cast<juce::uint8>(b_blend)
+                );
+                
+                double mixRatio = std::min(1.0, w_sum / 3.0);
+                finalColor = lowcutColor.interpolatedWith(blendedBellColor, static_cast<float>(mixRatio));
+            }
+            else
+            {
+                finalColor = lowcutColor;
+            }
+            
+            cachedLineGrad.addColour(proportion, finalColor);
+            cachedFillGrad.addColour(proportion, finalColor.withAlpha(0.15f));
+        }
+
         pathNeedsRecalculation = false;
     }
 
@@ -317,22 +424,11 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
     fillPath.lineTo(0.0f, gainToY(0.0f));
     fillPath.closeSubPath();
 
-    // 塗りつぶしグラデーション
-    juce::Colour lineCol = pal.lowcut;
-    if (selectedBandIdx == 1) lineCol = pal.bell1;
-    else if (selectedBandIdx >= 2) {
-        juce::Colour bColors[4] = { pal.bell1, pal.bell2, pal.bell3, pal.bell4 };
-        lineCol = bColors[selectedBandIdx - 2];
-    }
-
-    juce::ColourGradient fillGrad(lineCol.withAlpha(0.15f), 0.0f, gainToY(currentMaxDb),
-                                  lineCol.withAlpha(0.0f), 0.0f, gainToY(0.0f), false);
-    g.setGradientFill(fillGrad);
+    g.setGradientFill(cachedFillGrad);
     g.fillPath(fillPath);
 
-    // ライン描画
-    g.setColour(lineCol);
-    g.strokePath(cachedResponsePath, juce::PathStrokeType(2.5f, juce::PathStrokeType::mitered, juce::PathStrokeType::rounded));
+    g.setGradientFill(cachedLineGrad);
+    g.strokePath(cachedResponsePath, juce::PathStrokeType(2.0f, juce::PathStrokeType::mitered, juce::PathStrokeType::rounded));
 
     // 5. EQコントロールポイントの描画
     drawEQPoints(g);

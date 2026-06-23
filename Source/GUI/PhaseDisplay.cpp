@@ -2,6 +2,7 @@
 #include "AnalyzerDSP.h"
 #include "ColorPalette.h"
 #include "MinimumPhaseEQ.h"
+#include "PluginProcessor.h"
 
 PhaseDisplay::PhaseDisplay()
 {
@@ -71,6 +72,16 @@ void PhaseDisplay::paint(juce::Graphics& g)
     
     // 背景
     g.fillAll(juce::Colour(0xff0d0d15));
+
+    // サンプリングレートの動的同期
+    if (responseDisplay != nullptr && responseDisplay->getProcessor() != nullptr)
+    {
+        double psr = responseDisplay->getProcessor()->getSampleRate();
+        if (psr > 8000.0 && std::abs(currentSampleRate - psr) > 0.01)
+        {
+            currentSampleRate = psr;
+        }
+    }
 
     auto bounds = getLocalBounds();
     int w = bounds.getWidth();
@@ -151,41 +162,63 @@ void PhaseDisplay::drawAnalyzerSpectrum(juce::Graphics& g, juce::Rectangle<int> 
 {
     if (analyzer == nullptr) return;
 
-    int w = bounds.getWidth();
-    int h = bounds.getHeight();
+    float w = static_cast<float>(bounds.getWidth());
+    float h = static_cast<float>(bounds.getHeight());
+    float xOffset = static_cast<float>(bounds.getX());
+
     float minF = responseDisplay != nullptr ? responseDisplay->getMinF() : 10.0f;
     float maxF = responseDisplay != nullptr ? responseDisplay->getMaxF() : 20000.0f;
 
-    std::vector<float> magnitudes = analyzer->getDetailedSpectrum(minF, maxF, w);
+    std::vector<float> magnitudes = analyzer->getDetailedSpectrum(minF, maxF, static_cast<int>(w));
 
-    juce::Path path;
+    juce::Path fillPath;
+    juce::Path strokePath;
     bool started = false;
 
     auto gainToY = [h](float db) {
         float minDb = -70.0f;
         float maxDb = 10.0f;
         float val = (db - minDb) / (maxDb - minDb);
-        return (1.0f - val) * static_cast<float>(h);
+        return (1.0f - val) * h;
     };
 
-    for (int i = 0; i < w; ++i)
+    for (int i = 0; i < static_cast<int>(w); ++i)
     {
-        float y = gainToY(magnitudes[static_cast<size_t>(i)]);
+        float magDb = magnitudes[static_cast<size_t>(i)];
+        float y = gainToY(magDb);
+        y = std::clamp(y, 0.0f, h);
+
         if (!started)
         {
-            path.startNewSubPath(static_cast<float>(i), y);
+            fillPath.startNewSubPath(xOffset + i, h);
+            fillPath.lineTo(xOffset + i, y);
+            strokePath.startNewSubPath(xOffset + i, y);
             started = true;
         }
         else
         {
-            path.lineTo(static_cast<float>(i), y);
+            fillPath.lineTo(xOffset + i, y);
+            strokePath.lineTo(xOffset + i, y);
         }
     }
 
     if (started)
     {
-        g.setColour(juce::Colour(0xff222240).withAlpha(0.15f));
-        g.strokePath(path, juce::PathStrokeType(1.0f));
+        fillPath.lineTo(xOffset + w, h);
+        fillPath.closeSubPath();
+
+        const auto& pal = getPalettes()[static_cast<size_t>(currentPaletteIdx)];
+        
+        juce::ColourGradient fillGrad(
+            pal.anaFill, xOffset, h - 120.0f,
+            pal.anaFill.withAlpha(0.0f), xOffset, h,
+            false
+        );
+        g.setGradientFill(fillGrad);
+        g.fillPath(fillPath);
+
+        g.setColour(pal.anaStroke.withAlpha(0.4f));
+        g.strokePath(strokePath, juce::PathStrokeType(1.0f));
     }
 }
 

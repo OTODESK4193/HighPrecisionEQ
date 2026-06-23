@@ -34,6 +34,7 @@ public:
 
     float getMinF() const noexcept { return currentMinF; }
     float getMaxF() const noexcept { return currentMaxF; }
+    HighPrecisionEQAudioProcessor* getProcessor() const noexcept { return processor; }
 
     void mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) override;
 
