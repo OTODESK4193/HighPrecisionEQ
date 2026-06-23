@@ -190,6 +190,8 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
     int w = getWidth();
     int h = getHeight();
 
+    if (w <= 0 || h <= 0) return;
+
     // 1. 周波数グリッド描画 (ズームに応じた適応型動的グリッド)
     float range = currentMaxF - currentMinF;
     g.setColour(juce::Colour(0xff222230));
@@ -380,8 +382,15 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
         {
             float f = xToLogF(static_cast<float>(x));
             double mag = localEQ.getMagnitudeForFrequency(f);
+
+            // NaN/inf ガード: 振幅が極めて小さい、または無効値のときに -inf になり、
+            // juce::Path が壊れて描画全体が消滅するのを完全に防ぐ
+            if (std::isnan(mag) || std::isinf(mag)) mag = 1.0;
+            mag = std::max(mag, 1e-10);
+
             float magDb = static_cast<float>(juce::Decibels::gainToDecibels(mag));
             float y = gainToY(magDb);
+            y = std::clamp(y, -100.0f, static_cast<float>(h) + 100.0f);
 
             if (!started)
             {
@@ -770,7 +779,61 @@ void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::
     if (processor == nullptr) return;
     auto& apvts = processor->apvts;
 
-    int targetBand = selectedBandIdx;
+    // マウスカーソルがEQポイントの上にあるか判定
+    float mouseX = static_cast<float>(e.x);
+    float mouseY = static_cast<float>(e.y);
+    const float grabRadius = 15.0f;
+    int targetBand = -1;
+
+    // 1. LowCut
+    if (currentLowcutEnable)
+    {
+        float x = logFToX(static_cast<float>(currentCutoffHz));
+        float y = gainToY(static_cast<float>(currentGainDb));
+        if (std::hypot(mouseX - x, mouseY - y) < grabRadius)
+        {
+            targetBand = 0;
+        }
+    }
+
+    // 2. HighCut
+    if (targetBand == -1 && currentHighCutEnable)
+    {
+        float x = logFToX(static_cast<float>(currentHighCutFreq));
+        float y = gainToY(0.0f);
+        if (std::hypot(mouseX - x, mouseY - y) < grabRadius)
+        {
+            targetBand = 1;
+        }
+    }
+
+    // 3. Bells
+    if (targetBand == -1)
+    {
+        for (int i = 0; i < 4; ++i)
+        {
+            if (bellParams[i].active)
+            {
+                float x = logFToX(static_cast<float>(bellParams[i].freq));
+                float y = gainToY(static_cast<float>(bellParams[i].gain));
+                if (std::hypot(mouseX - x, mouseY - y) < grabRadius)
+                {
+                    targetBand = i + 2;
+                    break;
+                }
+            }
+        }
+    }
+
+    // どのEQポイントの上でもない場合は何もしない
+    if (targetBand == -1)
+        return;
+
+    // 操作したバンドを選択状態にする
+    if (selectedBandIdx != targetBand && editor != nullptr)
+    {
+        editor->selectBand(static_cast<HighPrecisionEQAudioProcessorEditor::SelectedBand>(targetBand));
+    }
 
     if (targetBand == 0) // LowCut
     {

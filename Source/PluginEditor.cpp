@@ -9,12 +9,9 @@ HighPrecisionEQAudioProcessorEditor::HighPrecisionEQAudioProcessorEditor(HighPre
     // Intel GPU向けにOpenGL Contextをアタッチ
     openGLContext.attachTo(*this);
 
-    // リサイズとアスペクト比（9:5）の固定
+    // リサイズを有効化（アスペクト比固定は解除し、自由にサイズ変更できるようにする）
     setResizable(true, true);
     setResizeLimits(720, 400, 1800, 1000);
-    getConstrainer()->setFixedAspectRatio(900.0 / 500.0);
-
-    addAndMakeVisible(mainContainer);
 
     // スライダーのLookAndFeelをセット
     cutoffSlider.setLookAndFeel(&arcLAF);
@@ -58,11 +55,11 @@ HighPrecisionEQAudioProcessorEditor::HighPrecisionEQAudioProcessorEditor(HighPre
         bandButtons[i].setRadioGroupId(1001);
         bandButtons[i].setClickingTogglesState(true);
         bandButtons[i].onClick = [this, i]() { selectBand(static_cast<SelectedBand>(i)); };
-        mainContainer.addAndMakeVisible(bandButtons[i]);
+        addAndMakeVisible(bandButtons[i]);
         
         enableButtons[i].setClickingTogglesState(true);
         enableButtons[i].onStateChange = [this]() { updateComponentColors(); };
-        mainContainer.addAndMakeVisible(enableButtons[i]);
+        addAndMakeVisible(enableButtons[i]);
     }
 
     // コールバック接続 (メンバ関数を呼ぶ)
@@ -133,24 +130,24 @@ HighPrecisionEQAudioProcessorEditor::HighPrecisionEQAudioProcessorEditor(HighPre
     phaseDisplay.setColorPaletteIndex(currentPaletteIdx);
     waveformDisplay.setColorPaletteIndex(currentPaletteIdx);
 
-    // コンテナへ子コンポーネントを追加
-    mainContainer.addChildComponent(freqDisplay);
-    mainContainer.addChildComponent(waveformDisplay);
-    mainContainer.addChildComponent(phaseDisplay);
+    // 子コンポーネントを追加
+    addChildComponent(freqDisplay);
+    addChildComponent(waveformDisplay);
+    addChildComponent(phaseDisplay);
     freqDisplay.setVisible(true);
 
-    mainContainer.addAndMakeVisible(analyzeButton);
-    mainContainer.addAndMakeVisible(diffButton);
-    mainContainer.addAndMakeVisible(bypassButton);
-    mainContainer.addAndMakeVisible(colorButton);
-    mainContainer.addAndMakeVisible(cutoffLabel);
-    mainContainer.addAndMakeVisible(cutoffSlider);
-    mainContainer.addAndMakeVisible(gainLabel);
-    mainContainer.addAndMakeVisible(gainSlider);
-    mainContainer.addAndMakeVisible(slopeLabel);
-    mainContainer.addAndMakeVisible(slopeSlider);
-    mainContainer.addAndMakeVisible(qLabel);
-    mainContainer.addAndMakeVisible(qSlider);
+    addAndMakeVisible(analyzeButton);
+    addAndMakeVisible(diffButton);
+    addAndMakeVisible(bypassButton);
+    addAndMakeVisible(colorButton);
+    addAndMakeVisible(cutoffLabel);
+    addAndMakeVisible(cutoffSlider);
+    addAndMakeVisible(gainLabel);
+    addAndMakeVisible(gainSlider);
+    addAndMakeVisible(slopeLabel);
+    addAndMakeVisible(slopeSlider);
+    addAndMakeVisible(qLabel);
+    addAndMakeVisible(qSlider);
 
     setSize(900, 500);
 
@@ -171,18 +168,6 @@ HighPrecisionEQAudioProcessorEditor::~HighPrecisionEQAudioProcessorEditor()
 
 void HighPrecisionEQAudioProcessorEditor::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colour(0xff12121e));
-}
-
-void HighPrecisionEQAudioProcessorEditor::resized()
-{
-    float scale = (float)getWidth() / 900.0f;
-    mainContainer.setBounds(0, 0, 900, 500);
-    mainContainer.setTransform(juce::AffineTransform::scale(scale));
-}
-
-void HighPrecisionEQAudioProcessorEditor::MainContainer::paint(juce::Graphics& g)
-{
     // 暗い背景
     g.fillAll(juce::Colour(0xff12121e));
 
@@ -201,19 +186,19 @@ void HighPrecisionEQAudioProcessorEditor::MainContainer::paint(juce::Graphics& g
     g.drawText("v1.0.0", getWidth() - 65, 15, 50, 15, juce::Justification::right);
 }
 
-void HighPrecisionEQAudioProcessorEditor::MainContainer::resized()
+void HighPrecisionEQAudioProcessorEditor::resized()
 {
     auto area = getLocalBounds().reduced(20);
 
     // ヘッダー空間
     auto headerArea = area.removeFromTop(40);
-    editor.analyzeButton.setBounds(headerArea.removeFromRight(80).withSizeKeepingCentre(80, 24));
+    analyzeButton.setBounds(headerArea.removeFromRight(80).withSizeKeepingCentre(80, 24));
     headerArea.removeFromRight(10);
-    editor.bypassButton.setBounds(headerArea.removeFromRight(80).withSizeKeepingCentre(80, 24));
+    bypassButton.setBounds(headerArea.removeFromRight(80).withSizeKeepingCentre(80, 24));
     headerArea.removeFromRight(10);
-    editor.colorButton.setBounds(headerArea.removeFromRight(80).withSizeKeepingCentre(80, 24));
+    colorButton.setBounds(headerArea.removeFromRight(80).withSizeKeepingCentre(80, 24));
     headerArea.removeFromRight(10);
-    editor.diffButton.setBounds(headerArea.removeFromRight(80).withSizeKeepingCentre(80, 24));
+    diffButton.setBounds(headerArea.removeFromRight(80).withSizeKeepingCentre(80, 24));
 
     // コントロール行
     auto controlRow = area.removeFromBottom(120);
@@ -222,12 +207,12 @@ void HighPrecisionEQAudioProcessorEditor::MainContainer::resized()
     // ディスプレイ割り当て
     auto displayArea = area;
     
-    if (editor.analyzeMode == AnalyzeMode::Waveform)
-        editor.waveformDisplay.setBounds(displayArea);
-    else if (editor.analyzeMode == AnalyzeMode::Phase)
-        editor.phaseDisplay.setBounds(displayArea);
+    if (analyzeMode == AnalyzeMode::Waveform)
+        waveformDisplay.setBounds(displayArea);
+    else if (analyzeMode == AnalyzeMode::Phase)
+        phaseDisplay.setBounds(displayArea);
     else
-        editor.freqDisplay.setBounds(displayArea);
+        freqDisplay.setBounds(displayArea);
     
     int totalWidth = controlRow.getWidth();
     int knobW = 150;
@@ -249,27 +234,27 @@ void HighPrecisionEQAudioProcessorEditor::MainContainer::resized()
     
     // スライダーの表示切り替えと配置
     auto cutoffArea = controlRow.removeFromLeft(knobW);
-    editor.cutoffLabel.setBounds(cutoffArea.removeFromTop(20));
-    editor.cutoffSlider.setBounds(cutoffArea);
+    cutoffLabel.setBounds(cutoffArea.removeFromTop(20));
+    cutoffSlider.setBounds(cutoffArea);
     
     controlRow.removeFromLeft(gap);
     
     auto gainArea = controlRow.removeFromLeft(knobW);
-    editor.gainLabel.setBounds(gainArea.removeFromTop(20));
-    editor.gainSlider.setBounds(gainArea);
+    gainLabel.setBounds(gainArea.removeFromTop(20));
+    gainSlider.setBounds(gainArea);
     
     controlRow.removeFromLeft(gap);
     
     auto thirdKnobArea = controlRow.removeFromLeft(knobW);
-    if (editor.currentBand == SelectedBand::LowCut || editor.currentBand == SelectedBand::HighCut)
+    if (currentBand == SelectedBand::LowCut || currentBand == SelectedBand::HighCut)
     {
-        editor.slopeLabel.setBounds(thirdKnobArea.removeFromTop(20));
-        editor.slopeSlider.setBounds(thirdKnobArea);
+        slopeLabel.setBounds(thirdKnobArea.removeFromTop(20));
+        slopeSlider.setBounds(thirdKnobArea);
     }
     else
     {
-        editor.qLabel.setBounds(thirdKnobArea.removeFromTop(20));
-        editor.qSlider.setBounds(thirdKnobArea);
+        qLabel.setBounds(thirdKnobArea.removeFromTop(20));
+        qSlider.setBounds(thirdKnobArea);
     }
 
     // バンド選択ボタン
@@ -281,9 +266,9 @@ void HighPrecisionEQAudioProcessorEditor::MainContainer::resized()
     {
         auto btnGroup = bandsArea.removeFromLeft(static_cast<int>(btnW));
         bandsArea.removeFromLeft(static_cast<int>(btnGap));
-        editor.bandButtons[i].setBounds(btnGroup.removeFromTop(26));
+        bandButtons[i].setBounds(btnGroup.removeFromTop(26));
         btnGroup.removeFromTop(2);
-        editor.enableButtons[i].setBounds(btnGroup.removeFromTop(16));
+        enableButtons[i].setBounds(btnGroup.removeFromTop(16));
     }
 }
 
