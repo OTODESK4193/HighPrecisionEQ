@@ -53,7 +53,7 @@ private:
     std::vector<double> stateEstimate;
     std::vector<double> stateCovariance;
 
-    double Q_process = 1e-4;
-    double R_measure = 2.0;
+    double Q_process = 2e-4;
+    double R_measure = 1.5;
     std::atomic<uint64_t> updateCount{ 0 };
 };

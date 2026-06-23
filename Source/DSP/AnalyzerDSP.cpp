@@ -61,11 +61,11 @@ void AnalyzerDSP::pushAudio(const float* data, int numSamples)
 void AnalyzerDSP::run()
 {
     const int analysisSize = 2048;
-    const int hopSize = 512; // 512サンプル (約11.6ms) ごとに最新の2048サンプルを解析する
+    const int hopSize = 128; // 128サンプル (約2.9ms) ごとに最新の2048サンプルを解析する
     
     while (!threadShouldExit())
     {
-        wait(10); // 短めのウェイトにして俊敏な更新を可能にする
+        wait(3); // 極小ウェイト (3ms) にして驚異的な滑らかさを実現
 
         if (threadShouldExit())
             break;
@@ -264,9 +264,20 @@ void AnalyzerDSP::applyBayesianSmoothing(const std::vector<double>& rawSpectrum)
     for (int b = 0; b < NumBands; ++b)
     {
         double y = rawSpectrum[static_cast<size_t>(b)];
-
         double x_pred = stateEstimate[static_cast<size_t>(b)];
-        double P_pred = stateCovariance[static_cast<size_t>(b)] + Q_process;
+
+        // アタック（上昇）とリリース（下降）で時定数を非対称にする
+        double q = Q_process;
+        if (y > x_pred)
+        {
+            q = Q_process * 8.0; // アタック時は追従を鋭くする (プロセスノイズ共分散を大きく)
+        }
+        else
+        {
+            q = Q_process * 0.5; // リリース時は滑らかに減衰させる (プロセスノイズ共分散を小さく)
+        }
+
+        double P_pred = stateCovariance[static_cast<size_t>(b)] + q;
 
         double K = P_pred / (P_pred + R_measure);
         double x_est = x_pred + K * (y - x_pred);

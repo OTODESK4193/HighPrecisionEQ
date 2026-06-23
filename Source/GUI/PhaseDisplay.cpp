@@ -90,8 +90,8 @@ void PhaseDisplay::paint(juce::Graphics& g)
     float minF = responseDisplay != nullptr ? responseDisplay->getMinF() : 10.0f;
     float maxF = responseDisplay != nullptr ? responseDisplay->getMaxF() : 20000.0f;
 
-    // 1. 周波数グリッド描画 (対数)
-    float gridFreqs[] = { 20.0f, 50.0f, 100.0f, 200.0f, 500.0f, 1000.0f, 2000.0f, 5000.0f, 10000.0f, 20000.0f };
+    // 1. 周波数グリッド描画 (ズームに応じた適応型動的グリッド)
+    float range = maxF - minF;
     g.setColour(juce::Colour(0xff222230));
     
     auto logFToX = [w, minF, maxF](float f) {
@@ -101,18 +101,78 @@ void PhaseDisplay::paint(juce::Graphics& g)
         return val * static_cast<float>(w);
     };
 
-    for (float f : gridFreqs)
+    if (range <= 1000.0f)
     {
-        if (f >= minF && f <= maxF)
+        // 線形ステップグリッドの算出
+        float gridStep = 100.0f;
+        if (range <= 2.0f)        gridStep = 0.2f;
+        else if (range <= 10.0f)   gridStep = 1.0f;
+        else if (range <= 50.0f)   gridStep = 5.0f;
+        else if (range <= 200.0f)  gridStep = 20.0f;
+
+        float firstGrid = std::ceil(minF / gridStep) * gridStep;
+        float lastLabelX = -100.0f;
+
+        for (float f = firstGrid; f <= maxF + 0.0001f; f += gridStep)
         {
-            float x = logFToX(f);
-            g.drawVerticalLine(static_cast<int>(x), 0.0f, static_cast<float>(h));
-            
-            g.setColour(juce::Colour(0xff555570));
-            g.setFont(juce::Font(juce::FontOptions("Outfit", 9.0f, juce::Font::plain)));
-            juce::String text = (f >= 1000.0f) ? juce::String(f / 1000.0f, 0) + "k" : juce::String(f, 0);
-            g.drawText(text, static_cast<int>(x) - 15, h - 15, 30, 12, juce::Justification::centred);
-            g.setColour(juce::Colour(0xff222230));
+            if (f >= minF && f <= maxF)
+            {
+                float x = logFToX(f);
+                g.setColour(juce::Colour(0xff222230));
+                g.drawVerticalLine(static_cast<int>(x), 0.0f, static_cast<float>(h));
+
+                // 隣り合うラベルが近すぎる場合はラベル描画をスキップ (間引き)
+                if (x - lastLabelX >= 40.0f)
+                {
+                    g.setColour(juce::Colour(0xff555570));
+                    g.setFont(juce::Font(juce::FontOptions("Outfit", 9.0f, juce::Font::plain)));
+                    
+                    juce::String text;
+                    if (gridStep == 0.2f)
+                    {
+                        text = juce::String(f, 1) + " Hz";
+                    }
+                    else if (f >= 1000.0f)
+                    {
+                        float kF = f / 1000.0f;
+                        if (std::abs(kF - std::round(kF)) < 0.01f)
+                            text = juce::String(static_cast<int>(std::round(kF))) + "k";
+                        else
+                            text = juce::String(kF, 1) + "k";
+                    }
+                    else
+                    {
+                        text = juce::String(static_cast<int>(std::round(f))) + " Hz";
+                    }
+                    
+                    g.drawText(text, static_cast<int>(x) - 25, h - 15, 50, 12, juce::Justification::centred);
+                    lastLabelX = x;
+                }
+            }
+        }
+    }
+    else
+    {
+        // 従来の対数グリッド
+        float gridFreqs[] = { 20.0f, 50.0f, 100.0f, 200.0f, 500.0f, 1000.0f, 2000.0f, 5000.0f, 10000.0f, 20000.0f };
+        float lastLabelX = -100.0f;
+        for (float f : gridFreqs)
+        {
+            if (f >= minF && f <= maxF)
+            {
+                float x = logFToX(f);
+                g.setColour(juce::Colour(0xff222230));
+                g.drawVerticalLine(static_cast<int>(x), 0.0f, static_cast<float>(h));
+                
+                if (x - lastLabelX >= 40.0f)
+                {
+                    g.setColour(juce::Colour(0xff555570));
+                    g.setFont(juce::Font(juce::FontOptions("Outfit", 9.0f, juce::Font::plain)));
+                    juce::String text = (f >= 1000.0f) ? juce::String(f / 1000.0f, 0) + "k" : juce::String(f, 0);
+                    g.drawText(text, static_cast<int>(x) - 15, h - 15, 30, 12, juce::Justification::centred);
+                    lastLabelX = x;
+                }
+            }
         }
     }
 

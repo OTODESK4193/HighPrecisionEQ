@@ -34,10 +34,10 @@ FreqResponseDisplay::FreqResponseDisplay()
     zoomInXBtn.onClick = [this]() {
         float centerLog = std::sqrt(currentMinF * currentMaxF);
         float ratio = currentMaxF / currentMinF;
-        float newRatio = std::max(ratio * 0.6f, 3.0f);
+        float newRatio = std::max(ratio * 0.6f, 1.002f);
         currentMinF = centerLog / std::sqrt(newRatio);
         currentMaxF = centerLog * std::sqrt(newRatio);
-        if (currentMinF < 10.0f) currentMinF = 10.0f;
+        if (currentMinF < 1.0f) currentMinF = 1.0f;
         if (currentMaxF > 24000.0f) currentMaxF = 24000.0f;
         pathNeedsRecalculation = true;
         repaint();
@@ -49,7 +49,7 @@ FreqResponseDisplay::FreqResponseDisplay()
         float newRatio = std::min(ratio * 1.5f, 2400.0f);
         currentMinF = centerLog / std::sqrt(newRatio);
         currentMaxF = centerLog * std::sqrt(newRatio);
-        if (currentMinF < 10.0f) currentMinF = 10.0f;
+        if (currentMinF < 1.0f) currentMinF = 1.0f;
         if (currentMaxF > 24000.0f) currentMaxF = 24000.0f;
         pathNeedsRecalculation = true;
         repaint();
@@ -205,21 +205,82 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
     int w = getWidth();
     int h = getHeight();
 
-    // 1. 周波数グリッド描画 (対数)
-    float gridFreqs[] = { 20.0f, 50.0f, 100.0f, 200.0f, 500.0f, 1000.0f, 2000.0f, 5000.0f, 10000.0f, 20000.0f };
+    // 1. 周波数グリッド描画 (ズームに応じた適応型動的グリッド)
+    float range = currentMaxF - currentMinF;
     g.setColour(juce::Colour(0xff222230));
-    for (float f : gridFreqs)
+
+    if (range <= 1000.0f)
     {
-        if (f >= currentMinF && f <= currentMaxF)
+        // 線形ステップグリッドの算出
+        float gridStep = 100.0f;
+        if (range <= 2.0f)        gridStep = 0.2f;
+        else if (range <= 10.0f)   gridStep = 1.0f;
+        else if (range <= 50.0f)   gridStep = 5.0f;
+        else if (range <= 200.0f)  gridStep = 20.0f;
+
+        float firstGrid = std::ceil(currentMinF / gridStep) * gridStep;
+        float lastLabelX = -100.0f;
+
+        for (float f = firstGrid; f <= currentMaxF + 0.0001f; f += gridStep)
         {
-            float x = logFToX(f);
-            g.drawVerticalLine(static_cast<int>(x), 0.0f, static_cast<float>(h));
-            
-            g.setColour(juce::Colour(0xff555570));
-            g.setFont(juce::Font(juce::FontOptions("Outfit", 9.0f, juce::Font::plain)));
-            juce::String text = (f >= 1000.0f) ? juce::String(f / 1000.0f, 0) + "k" : juce::String(f, 0);
-            g.drawText(text, static_cast<int>(x) - 15, h - 15, 30, 12, juce::Justification::centred);
-            g.setColour(juce::Colour(0xff222230));
+            if (f >= currentMinF && f <= currentMaxF)
+            {
+                float x = logFToX(f);
+                g.setColour(juce::Colour(0xff222230));
+                g.drawVerticalLine(static_cast<int>(x), 0.0f, static_cast<float>(h));
+
+                // 隣り合うラベルが近すぎる場合はラベル描画をスキップ (間引き)
+                if (x - lastLabelX >= 40.0f)
+                {
+                    g.setColour(juce::Colour(0xff555570));
+                    g.setFont(juce::Font(juce::FontOptions("Outfit", 9.0f, juce::Font::plain)));
+                    
+                    juce::String text;
+                    if (gridStep == 0.2f)
+                    {
+                        text = juce::String(f, 1) + " Hz";
+                    }
+                    else if (f >= 1000.0f)
+                    {
+                        float kF = f / 1000.0f;
+                        if (std::abs(kF - std::round(kF)) < 0.01f)
+                            text = juce::String(static_cast<int>(std::round(kF))) + "k";
+                        else
+                            text = juce::String(kF, 1) + "k";
+                    }
+                    else
+                    {
+                        text = juce::String(static_cast<int>(std::round(f))) + " Hz";
+                    }
+                    
+                    g.drawText(text, static_cast<int>(x) - 25, h - 15, 50, 12, juce::Justification::centred);
+                    lastLabelX = x;
+                }
+            }
+        }
+    }
+    else
+    {
+        // 従来の対数グリッド
+        float gridFreqs[] = { 20.0f, 50.0f, 100.0f, 200.0f, 500.0f, 1000.0f, 2000.0f, 5000.0f, 10000.0f, 20000.0f };
+        float lastLabelX = -100.0f;
+        for (float f : gridFreqs)
+        {
+            if (f >= currentMinF && f <= currentMaxF)
+            {
+                float x = logFToX(f);
+                g.setColour(juce::Colour(0xff222230));
+                g.drawVerticalLine(static_cast<int>(x), 0.0f, static_cast<float>(h));
+                
+                if (x - lastLabelX >= 40.0f)
+                {
+                    g.setColour(juce::Colour(0xff555570));
+                    g.setFont(juce::Font(juce::FontOptions("Outfit", 9.0f, juce::Font::plain)));
+                    juce::String text = (f >= 1000.0f) ? juce::String(f / 1000.0f, 0) + "k" : juce::String(f, 0);
+                    g.drawText(text, static_cast<int>(x) - 15, h - 15, 30, 12, juce::Justification::centred);
+                    lastLabelX = x;
+                }
+            }
         }
     }
 
@@ -569,7 +630,7 @@ void FreqResponseDisplay::mouseDrag(const juce::MouseEvent& e)
     float dragFreq = xToLogF(mouseX);
     float dragGain = yToGain(mouseY);
 
-    if (processor != nullptr)
+    if (processor != nullptr && activeDragBand != -1)
     {
         auto& apvts = processor->apvts;
 
@@ -622,11 +683,11 @@ void FreqResponseDisplay::mouseDrag(const juce::MouseEvent& e)
             float xZoomFactor = std::pow(1.005f, -dx);
             float centerLog = std::sqrt(dragStartMinF * dragStartMaxF);
             float ratio = dragStartMaxF / dragStartMinF;
-            float newRatio = std::clamp(ratio * xZoomFactor, 3.0f, 2400.0f);
+            float newRatio = std::clamp(ratio * xZoomFactor, 1.002f, 2400.0f); // 最小比率を 1.002f に緩和
             
             currentMinF = centerLog / std::sqrt(newRatio);
             currentMaxF = centerLog * std::sqrt(newRatio);
-            if (currentMinF < 10.0f) currentMinF = 10.0f;
+            if (currentMinF < 1.0f) currentMinF = 1.0f; // 1Hzまでズーム可
             if (currentMaxF > 24000.0f) currentMaxF = 24000.0f;
 
             float yZoomFactor = std::pow(1.005f, -dy);
@@ -637,7 +698,7 @@ void FreqResponseDisplay::mouseDrag(const juce::MouseEvent& e)
         {
             // 左ドラッグ: シフト移動
             float shiftFactor = std::pow(10.0f, -dx / static_cast<float>(getWidth()) * 0.5f);
-            currentMinF = std::max(dragStartMinF * shiftFactor, 10.0f);
+            currentMinF = std::max(dragStartMinF * shiftFactor, 1.0f); // 1Hzまで
             currentMaxF = std::min(dragStartMaxF * shiftFactor, 24000.0f);
             
             // Y軸シフト (アナライザーの基準オフセットを調整)
