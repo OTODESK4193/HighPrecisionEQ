@@ -1,4 +1,5 @@
 #include "FreqResponseDisplay.h"
+#include "../DSP/SOSCoefficients.h"
 #include "AnalyzerDSP.h"
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
@@ -144,8 +145,21 @@ void FreqResponseDisplay::updateParameters(double cutoffHz, int order, double ga
 
 void FreqResponseDisplay::precomputeFrequencies()
 {
-    // 各ピクセルに対応する対数周波数を事前に計算
-    precomputedFreqs.resize(1000);
+    int w = getWidth();
+    if (w <= 0) return;
+
+    precomputedFreqs.resize(static_cast<size_t>(w));
+    for (int x = 0; x < w; ++x)
+    {
+        float f = xToLogF(static_cast<float>(x));
+        double w_rad = 2.0 * std::numbers::pi * f / currentSampleRate;
+        
+        precomputedFreqs[static_cast<size_t>(x)].f = f;
+        precomputedFreqs[static_cast<size_t>(x)].cosw = std::cos(w_rad);
+        precomputedFreqs[static_cast<size_t>(x)].sinw = std::sin(w_rad);
+        precomputedFreqs[static_cast<size_t>(x)].cos2w = std::cos(2.0 * w_rad);
+        precomputedFreqs[static_cast<size_t>(x)].sin2w = std::sin(2.0 * w_rad);
+    }
 }
 
 
@@ -346,7 +360,7 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
                                           pal.anaFill.withAlpha(0.0f), 0.0f, static_cast<float>(h), false);
             g.setGradientFill(fillGrad);
             g.fillPath(analyzerPath);
-
+            
             g.setColour(pal.anaStroke);
             g.strokePath(strokePath, juce::PathStrokeType(1.2f));
         }
@@ -355,41 +369,180 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
     // 4. EQ特性カーブの再計算と描画
     if (pathNeedsRecalculation || cachedResponsePath.isEmpty())
     {
-        if (precomputedFreqs.size() < static_cast<size_t>(w + 1))
-        {
-            precomputeFrequencies();
-        }
+        precomputeFrequencies();
 
         cachedResponsePath.clear();
-        
-        // 最適なイコライザー応答カーブ計算
-        MinimumPhaseEQ localEQ;
-        std::array<MinimumPhaseEQ::BellParam, 4> localBells;
+
+        // 1. Bells の事前計算
+        struct PrecomputedBell {
+            bool active = false;
+            double b0, b1, b2, a1, a2;
+        };
+        std::array<PrecomputedBell, 4> prepBells;
         for (int i = 0; i < 4; ++i)
         {
-            localBells[i].freq = bellParams[i].freq;
-            localBells[i].gain = bellParams[i].gain;
-            localBells[i].q = bellParams[i].q;
-            localBells[i].active = bellParams[i].active;
+            const auto& bp = bellParams[i];
+            if (!bp.active || std::abs(bp.gain) < 0.01)
+            {
+                prepBells[i].active = false;
+                continue;
+            }
+            prepBells[i].active = true;
+            
+            double A = std::pow(10.0, bp.gain / 40.0);
+            double w0 = 2.0 * std::numbers::pi * bp.freq / currentSampleRate;
+            double alpha = std::sin(w0) / (2.0 * bp.q);
+            
+            double a0 = 1.0 + alpha / A;
+            prepBells[i].b0 = (1.0 + alpha * A) / a0;
+            prepBells[i].b1 = (-2.0 * std::cos(w0)) / a0;
+            prepBells[i].b2 = (1.0 - alpha * A) / a0;
+            prepBells[i].a1 = (-2.0 * std::cos(w0)) / a0;
+            prepBells[i].a2 = (1.0 - alpha / A) / a0;
         }
-        localEQ.prepare(currentSampleRate, 512);
-        localEQ.updateParameters(currentCutoffHz, currentOrder, currentLowcutEnable,
-                                 currentHighCutFreq, currentHighCutOrder, currentHighCutEnable,
-                                 localBells);
+
+        auto getBellMagCached = [](double cosw, double sinw, double cos2w, double sin2w, const PrecomputedBell& pb) {
+            if (!pb.active) return 1.0;
+            
+            double numRe = pb.b0 + pb.b1 * cosw + pb.b2 * cos2w;
+            double numIm = -pb.b1 * sinw - pb.b2 * sin2w;
+            double numMagSq = numRe * numRe + numIm * numIm;
+            
+            double denRe = 1.0 + pb.a1 * cosw + pb.a2 * cos2w;
+            double denIm = -pb.a1 * sinw - pb.a2 * sin2w;
+            double denMagSq = denRe * denRe + denIm * denIm;
+            
+            if (denMagSq <= 0.0) return 1.0;
+            return std::sqrt(numMagSq / denMagSq);
+        };
+
+        // 2. HighCut (LowPass) の事前計算
+        struct PrecomputedCut {
+            bool active = false;
+            double b0, b1, b2, a1, a2;
+            bool isFirstOrder = false;
+        };
+        std::vector<PrecomputedCut> prepHighCuts;
+        if (currentHighCutEnable && currentHighCutOrder > 0)
+        {
+            int order = std::clamp(currentHighCutOrder, 1, 8);
+            int numBiquads = order / 2;
+            bool hasFirstOrder = (order % 2) != 0;
+            
+            double w0 = 2.0 * std::numbers::pi * currentHighCutFreq / currentSampleRate;
+            double cosw0 = std::cos(w0);
+            double sinw0 = std::sin(w0);
+            
+            if (hasFirstOrder)
+            {
+                PrecomputedCut sec;
+                sec.active = true;
+                sec.isFirstOrder = true;
+                
+                double K = std::tan(w0 / 2.0);
+                double norm = 1.0 / (1.0 + K);
+                sec.b0 = K * norm;
+                sec.b1 = K * norm;
+                sec.b2 = 0.0;
+                sec.a1 = (K - 1.0) * norm;
+                sec.a2 = 0.0;
+                prepHighCuts.push_back(sec);
+            }
+            
+            for (int k = 0; k < numBiquads; ++k)
+            {
+                PrecomputedCut sec;
+                sec.active = true;
+                sec.isFirstOrder = false;
+                
+                double angle = std::numbers::pi * (2.0 * k + 1.0) / (2.0 * order);
+                double Q = 1.0 / (2.0 * std::sin(angle));
+                
+                double alpha = sinw0 / (2.0 * Q);
+                double a0 = 1.0 + alpha;
+                double a0_inv = 1.0 / a0;
+                
+                sec.b0 = (1.0 - cosw0) * 0.5 * a0_inv;
+                sec.b1 = (1.0 - cosw0) * a0_inv;
+                sec.b2 = (1.0 - cosw0) * 0.5 * a0_inv;
+                sec.a1 = -2.0 * cosw0 * a0_inv;
+                sec.a2 = (1.0 - alpha) * a0_inv;
+                prepHighCuts.push_back(sec);
+            }
+        }
+
+        // 3. LowCut (HighPass) の計算
+        auto sos = SOSCoefficients::computeHighPass(currentCutoffHz, currentSampleRate, currentOrder, currentGainDb);
+        double mix = std::clamp(std::abs(currentGainDb) / 10.0, 0.0, 1.0);
 
         bool started = false;
         for (int x = 0; x < w; ++x)
         {
-            float f = xToLogF(static_cast<float>(x));
-            double mag = localEQ.getMagnitudeForFrequency(f);
+            if (static_cast<size_t>(x) >= precomputedFreqs.size()) break;
+            const auto& pf = precomputedFreqs[static_cast<size_t>(x)];
 
-            // NaN/inf ガード: 振幅が極めて小さい、または無効値のときに -inf になり、
-            // juce::Path が壊れて描画全体が消滅するのを完全に防ぐ
-            if (std::isnan(mag) || std::isinf(mag)) mag = 1.0;
-            mag = std::max(mag, 1e-10);
+            // LowCut (HighPass) 応答計算
+            double wetMagSq = 1.0;
+            for (const auto& sec : sos)
+            {
+                double numReal = sec.b0 + sec.b1 * pf.cosw + sec.b2 * pf.cos2w;
+                double numImag = -(sec.b1 * pf.sinw + sec.b2 * pf.sin2w);
+                double numMagSq = numReal * numReal + numImag * numImag;
+                
+                double denReal = 1.0 + sec.a1 * pf.cosw + sec.a2 * pf.cos2w;
+                double denImag = -(sec.a1 * pf.sinw + sec.a2 * pf.sin2w);
+                double denMagSq = denReal * denReal + denImag * denImag;
+                
+                if (denMagSq > 1e-15)
+                    wetMagSq *= (numMagSq / denMagSq);
+            }
 
-            float magDb = static_cast<float>(juce::Decibels::gainToDecibels(mag));
-            float y = gainToY(magDb);
+            double totalMag = 1.0;
+            if (currentLowcutEnable) {
+                totalMag = (1.0 - mix) + mix * std::sqrt(std::max(wetMagSq, 0.0));
+            }
+
+            // HighCut (LowPass) 応答計算
+            double hcMag = 1.0;
+            for (const auto& sec : prepHighCuts)
+            {
+                if (sec.isFirstOrder)
+                {
+                    double numRe = sec.b0 + sec.b1 * pf.cosw;
+                    double numIm = -sec.b1 * pf.sinw;
+                    double denRe = 1.0 + sec.a1 * pf.cosw;
+                    double denIm = -sec.a1 * pf.sinw;
+                    double denMagSq = denRe * denRe + denIm * denIm;
+                    if (denMagSq > 1e-15)
+                        hcMag *= std::sqrt((numRe * numRe + numIm * numIm) / denMagSq);
+                }
+                else
+                {
+                    double numRe = sec.b0 + sec.b1 * pf.cosw + sec.b2 * pf.cos2w;
+                    double numIm = -sec.b1 * pf.sinw - sec.b2 * pf.sin2w;
+                    double numMagSq = numRe * numRe + numIm * numIm;
+                    
+                    double denRe = 1.0 + sec.a1 * pf.cosw + sec.a2 * pf.cos2w;
+                    double denIm = -sec.a1 * pf.sinw - sec.a2 * pf.sin2w;
+                    double denMagSq = denRe * denRe + denIm * denIm;
+                    
+                    if (denMagSq > 1e-15)
+                        hcMag *= std::sqrt(numMagSq / denMagSq);
+                }
+            }
+            totalMag *= hcMag;
+
+            // Bells 応答計算
+            for (int i = 0; i < 4; ++i) {
+                totalMag *= getBellMagCached(pf.cosw, pf.sinw, pf.cos2w, pf.sin2w, prepBells[i]);
+            }
+
+            // NaN/inf ガード
+            if (std::isnan(totalMag) || std::isinf(totalMag)) totalMag = 1.0;
+            totalMag = std::max(totalMag, 1e-10);
+
+            double magDb = 20.0 * std::log10(totalMag);
+            float y = gainToY(static_cast<float>(magDb));
             y = std::clamp(y, -100.0f, static_cast<float>(h) + 100.0f);
 
             if (!started)
@@ -403,7 +556,6 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
             }
         }
 
-        // --- SampleChordと同等のColorロジック (横方向マルチカラーグラデーションの計算) ---
         cachedLineGrad = juce::ColourGradient(juce::Colours::transparentBlack, 0.0f, 0.0f,
                                               juce::Colours::transparentBlack, static_cast<float>(w), 0.0f, false);
         cachedFillGrad = juce::ColourGradient(juce::Colours::transparentBlack, 0.0f, 0.0f,
@@ -430,11 +582,11 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
             
             for (int bIdx = 0; bIdx < 4; ++bIdx)
             {
-                if (localBells[bIdx].active && std::abs(localBells[bIdx].gain) > 0.01)
+                if (bellParams[bIdx].active && std::abs(bellParams[bIdx].gain) > 0.01)
                 {
-                    double A = std::pow(10.0, localBells[bIdx].gain / 40.0);
-                    double w0 = 2.0 * std::numbers::pi * localBells[bIdx].freq / currentSampleRate;
-                    double alpha = std::sin(w0) / (2.0 * localBells[bIdx].q);
+                    double A = std::pow(10.0, bellParams[bIdx].gain / 40.0);
+                    double w0 = 2.0 * std::numbers::pi * bellParams[bIdx].freq / currentSampleRate;
+                    double alpha = std::sin(w0) / (2.0 * bellParams[bIdx].q);
                     
                     double a0 = 1.0 + alpha / A;
                     double b0 = (1.0 + alpha * A) / a0;
@@ -825,9 +977,13 @@ void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::
         }
     }
 
-    // どのEQポイントの上でもない場合は何もしない
+    // どのEQポイントの上でもない場合は、アナライザーの上下位置（基準オフセット）を調整する
     if (targetBand == -1)
+    {
+        analyzerGainOffsetDb = std::clamp(analyzerGainOffsetDb + wheel.deltaY * 3.0f, -40.0f, 40.0f);
+        repaint();
         return;
+    }
 
     // 操作したバンドを選択状態にする
     if (selectedBandIdx != targetBand && editor != nullptr)
