@@ -61,7 +61,17 @@ private:
     juce::OpenGLContext openGLContext;
     HighPrecisionEQAudioProcessor& processorRef;
 
-    // GUI コンポーネント
+    // --- 全体スケーリングのためのコンテナ ---
+    struct MainContainer : public juce::Component
+    {
+        MainContainer(HighPrecisionEQAudioProcessorEditor& ed) : editor(ed) {}
+        void paint(juce::Graphics& g) override;
+        void resized() override;
+        HighPrecisionEQAudioProcessorEditor& editor;
+    };
+    MainContainer mainContainer{ *this };
+
+    // GUI コンポーネント (mainContainerの内部でレイアウトされる)
     FreqResponseDisplay freqDisplay;
     WaveformDisplay     waveformDisplay;
     PhaseDisplay        phaseDisplay;
@@ -110,6 +120,7 @@ private:
 
     void updateAttachments();
     void updateComponentColors();
+    void updateGraph(); // メンバ関数に昇格
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(HighPrecisionEQAudioProcessorEditor)
 };

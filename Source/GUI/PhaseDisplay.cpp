@@ -178,7 +178,7 @@ void PhaseDisplay::paint(juce::Graphics& g)
 
     // 2. 位相グリッド描画 (Rad または Degree)
     // 基準は -pi 〜 +pi (ズームファクターによる拡大縮小)
-    float maxPhase = std::numbers::pi * phaseZoomFactor;
+    float maxPhase = static_cast<float>(std::numbers::pi) * phaseZoomFactor;
     float minPhase = -maxPhase;
 
     auto phaseToY = [h, minPhase, maxPhase](float rad) {
@@ -229,7 +229,28 @@ void PhaseDisplay::drawAnalyzerSpectrum(juce::Graphics& g, juce::Rectangle<int> 
     float minF = responseDisplay != nullptr ? responseDisplay->getMinF() : 10.0f;
     float maxF = responseDisplay != nullptr ? responseDisplay->getMaxF() : 20000.0f;
 
-    std::vector<float> magnitudes = analyzer->getDetailedSpectrum(minF, maxF, static_cast<int>(w));
+    std::vector<float> energies = analyzer->getEnergies();
+    
+    const int numBands = AnalyzerDSP::NumBands;
+    double fmin = 10.0;
+    double fmax = std::min(24000.0, currentSampleRate * 0.49);
+    double logFmin = std::log(fmin);
+    double logRatio = std::log(fmax / fmin);
+
+    // 480バンドの離散周波数値から対数線形補間するラムダ
+    auto getInterpolatedDb = [&](double f) -> float
+    {
+        if (f <= fmin) return energies[0];
+        if (f >= fmax) return energies[numBands - 1];
+        
+        double idx = (std::log(f) - logFmin) / logRatio * (numBands - 1);
+        int idx0 = std::clamp(static_cast<int>(std::floor(idx)), 0, numBands - 1);
+        int idx1 = std::clamp(idx0 + 1, 0, numBands - 1);
+        double frac = idx - idx0;
+        
+        return energies[static_cast<size_t>(idx0)] * (1.0f - static_cast<float>(frac)) 
+             + energies[static_cast<size_t>(idx1)] * static_cast<float>(frac);
+    };
 
     juce::Path fillPath;
     juce::Path strokePath;
@@ -244,7 +265,8 @@ void PhaseDisplay::drawAnalyzerSpectrum(juce::Graphics& g, juce::Rectangle<int> 
 
     for (int i = 0; i < static_cast<int>(w); ++i)
     {
-        float magDb = magnitudes[static_cast<size_t>(i)];
+        float f = responseDisplay != nullptr ? responseDisplay->xToLogF(static_cast<float>(i)) : 10.0f;
+        float magDb = getInterpolatedDb(f);
         float y = gainToY(magDb);
         y = std::clamp(y, 0.0f, h);
 
@@ -290,7 +312,7 @@ void PhaseDisplay::drawPhaseCurve(juce::Graphics& g, juce::Rectangle<int> bounds
     float minF = responseDisplay != nullptr ? responseDisplay->getMinF() : 10.0f;
     float maxF = responseDisplay != nullptr ? responseDisplay->getMaxF() : 20000.0f;
 
-    float maxPhase = std::numbers::pi * phaseZoomFactor;
+    float maxPhase = static_cast<float>(std::numbers::pi) * phaseZoomFactor;
     float minPhase = -maxPhase;
 
     auto xToLogF = [minF, maxF, w](float x) {

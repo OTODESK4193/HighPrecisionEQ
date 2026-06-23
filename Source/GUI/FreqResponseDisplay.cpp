@@ -148,21 +148,6 @@ void FreqResponseDisplay::precomputeFrequencies()
     precomputedFreqs.resize(1000);
 }
 
-float FreqResponseDisplay::logFToX(float f) const
-{
-    float logMin = std::log10(currentMinF);
-    float logMax = std::log10(currentMaxF);
-    float val = (std::log10(f) - logMin) / (logMax - logMin);
-    return val * static_cast<float>(getWidth());
-}
-
-float FreqResponseDisplay::xToLogF(float x) const
-{
-    float logMin = std::log10(currentMinF);
-    float logMax = std::log10(currentMaxF);
-    float val = x / static_cast<float>(getWidth());
-    return std::pow(10.0f, logMin + val * (logMax - logMin));
-}
 
 float FreqResponseDisplay::gainToY(float gainDecibels) const
 {
@@ -302,7 +287,28 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
     // 3. アナライザーリアルタイムスペクトラムの描画
     if (analyzer != nullptr)
     {
-        std::vector<float> magnitudes = analyzer->getDetailedSpectrum(currentMinF, currentMaxF, w);
+        std::vector<float> energies = analyzer->getEnergies();
+        
+        const int numBands = AnalyzerDSP::NumBands;
+        double fmin = 10.0;
+        double fmax = std::min(24000.0, currentSampleRate * 0.49);
+        double logFmin = std::log(fmin);
+        double logRatio = std::log(fmax / fmin);
+
+        // 480バンドの離散周波数値から対数線形補間するラムダ
+        auto getInterpolatedDb = [&](double f) -> float
+        {
+            if (f <= fmin) return energies[0];
+            if (f >= fmax) return energies[numBands - 1];
+            
+            double idx = (std::log(f) - logFmin) / logRatio * (numBands - 1);
+            int idx0 = std::clamp(static_cast<int>(std::floor(idx)), 0, numBands - 1);
+            int idx1 = std::clamp(idx0 + 1, 0, numBands - 1);
+            double frac = idx - idx0;
+            
+            return energies[static_cast<size_t>(idx0)] * (1.0f - static_cast<float>(frac)) 
+                 + energies[static_cast<size_t>(idx1)] * static_cast<float>(frac);
+        };
 
         juce::Path analyzerPath;
         juce::Path strokePath;
@@ -310,7 +316,8 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
         
         for (int i = 0; i < w; ++i)
         {
-            float magDb = magnitudes[static_cast<size_t>(i)];
+            float f = xToLogF(static_cast<float>(i));
+            float magDb = getInterpolatedDb(f);
             float y = analyzerGainToY(magDb);
             y = std::clamp(y, 0.0f, static_cast<float>(h));
             
@@ -728,10 +735,41 @@ void FreqResponseDisplay::mouseDoubleClick(const juce::MouseEvent&)
 
 void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel)
 {
+    // 1. Ctrlキー押下時の周波数軸ズーム
+    if (e.mods.isCtrlDown())
+    {
+        float mouseX = static_cast<float>(e.x);
+        float targetF = xToLogF(mouseX);
+        
+        float zoomFactor = std::pow(1.15f, -wheel.deltaY); // 上スクロールで拡大、下で縮小
+        
+        float centerLog = std::log10(targetF);
+        float minLog = std::log10(currentMinF);
+        float maxLog = std::log10(currentMaxF);
+        
+        float newMinLog = centerLog - (centerLog - minLog) * zoomFactor;
+        float newMaxLog = centerLog + (maxLog - centerLog) * zoomFactor;
+        
+        float newMinF = std::pow(10.0f, newMinLog);
+        float newMaxF = std::pow(10.0f, newMaxLog);
+        
+        float ratio = newMaxF / newMinF;
+        
+        // ズーム比制限 (1.002f 〜 2400.0f)
+        if (ratio >= 1.002f && ratio <= 2400.0f)
+        {
+            currentMinF = std::max(newMinF, 1.0f);
+            currentMaxF = std::min(newMaxF, 24000.0f);
+            pathNeedsRecalculation = true;
+            repaint();
+        }
+        return;
+    }
+
+    // 2. 通常のスクロール (Q幅やスロープの調整)
     if (processor == nullptr) return;
     auto& apvts = processor->apvts;
 
-    // 選択されているバンドに応じてQ値やスロープ値を調整
     int targetBand = selectedBandIdx;
 
     if (targetBand == 0) // LowCut

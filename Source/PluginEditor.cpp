@@ -9,6 +9,13 @@ HighPrecisionEQAudioProcessorEditor::HighPrecisionEQAudioProcessorEditor(HighPre
     // Intel GPU向けにOpenGL Contextをアタッチ
     openGLContext.attachTo(*this);
 
+    // リサイズとアスペクト比（9:5）の固定
+    setResizable(true, true);
+    setResizeLimits(720, 400, 1800, 1000);
+    getConstrainer()->setFixedAspectRatio(900.0 / 500.0);
+
+    addAndMakeVisible(mainContainer);
+
     // スライダーのLookAndFeelをセット
     cutoffSlider.setLookAndFeel(&arcLAF);
     cutoffSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
@@ -51,55 +58,21 @@ HighPrecisionEQAudioProcessorEditor::HighPrecisionEQAudioProcessorEditor(HighPre
         bandButtons[i].setRadioGroupId(1001);
         bandButtons[i].setClickingTogglesState(true);
         bandButtons[i].onClick = [this, i]() { selectBand(static_cast<SelectedBand>(i)); };
-        addAndMakeVisible(bandButtons[i]);
+        mainContainer.addAndMakeVisible(bandButtons[i]);
         
         enableButtons[i].setClickingTogglesState(true);
         enableButtons[i].onStateChange = [this]() { updateComponentColors(); };
-        addAndMakeVisible(enableButtons[i]);
+        mainContainer.addAndMakeVisible(enableButtons[i]);
     }
 
-    // グラフ描画更新のラムダ式
-    auto updateGraph = [this]()
-    {
-        double lcCutoff = processorRef.apvts.getRawParameterValue("cutoffHz")->load();
-        int lcSlope = static_cast<int>(processorRef.apvts.getRawParameterValue("slopeDbOct")->load());
-        int lcOrder = std::clamp(lcSlope / 12, 1, 8);
-        double lcGain = processorRef.apvts.getRawParameterValue("gainDb")->load();
-        bool lcEnable = processorRef.apvts.getRawParameterValue("lowcut_enable")->load() > 0.5f;
-
-        double hcFreq = processorRef.apvts.getRawParameterValue("highcut_freq")->load();
-        int hcSlope = static_cast<int>(processorRef.apvts.getRawParameterValue("highcut_slope")->load());
-        int hcOrder = std::clamp(hcSlope / 12, 1, 8);
-        bool hcEnable = processorRef.apvts.getRawParameterValue("highcut_enable")->load() > 0.5f;
-
-        std::array<FreqResponseDisplay::BellParam, 4> bells;
-        for (int i = 0; i < 4; ++i)
-        {
-            juce::String suffix = juce::String(i + 1);
-            bells[i].freq = processorRef.apvts.getRawParameterValue("bell_freq_" + suffix)->load();
-            bells[i].gain = processorRef.apvts.getRawParameterValue("bell_gain_" + suffix)->load();
-            bells[i].q = processorRef.apvts.getRawParameterValue("bell_q_" + suffix)->load();
-            bells[i].active = processorRef.apvts.getRawParameterValue("bell_enable_" + suffix)->load() > 0.5f;
-        }
-
-        freqDisplay.updateParameters(lcCutoff, lcOrder, lcGain, lcEnable,
-                                     hcFreq, hcOrder, hcEnable,
-                                     processorRef.getSampleRate(), bells);
-                                     
-        phaseDisplay.updateParameters(lcCutoff, lcOrder, lcGain, lcEnable,
-                                      hcFreq, hcOrder, hcEnable,
-                                      processorRef.getSampleRate(), bells);
-
-        updateComponentColors();
-    };
-
-    cutoffSlider.onValueChange = updateGraph;
-    gainSlider.onValueChange = updateGraph;
-    qSlider.onValueChange = updateGraph;
-    slopeSlider.onValueChange = updateGraph;
+    // コールバック接続 (メンバ関数を呼ぶ)
+    cutoffSlider.onValueChange = [this]() { updateGraph(); };
+    gainSlider.onValueChange = [this]() { updateGraph(); };
+    qSlider.onValueChange = [this]() { updateGraph(); };
+    slopeSlider.onValueChange = [this]() { updateGraph(); };
 
     for (int i = 0; i < 6; ++i)
-        enableButtons[i].onClick = updateGraph;
+        enableButtons[i].onClick = [this]() { updateGraph(); };
 
     // アタッチメント作成 (ボタン関係)
     enableAttachments[0] = std::make_unique<ButtonAttachment>(processorRef.apvts, "lowcut_enable", enableButtons[0]);
@@ -160,24 +133,24 @@ HighPrecisionEQAudioProcessorEditor::HighPrecisionEQAudioProcessorEditor(HighPre
     phaseDisplay.setColorPaletteIndex(currentPaletteIdx);
     waveformDisplay.setColorPaletteIndex(currentPaletteIdx);
 
-    // 子コンポーネント追加と表示設定
-    addChildComponent(freqDisplay);
-    addChildComponent(waveformDisplay);
-    addChildComponent(phaseDisplay);
+    // コンテナへ子コンポーネントを追加
+    mainContainer.addChildComponent(freqDisplay);
+    mainContainer.addChildComponent(waveformDisplay);
+    mainContainer.addChildComponent(phaseDisplay);
     freqDisplay.setVisible(true);
 
-    addAndMakeVisible(analyzeButton);
-    addAndMakeVisible(diffButton);
-    addAndMakeVisible(bypassButton);
-    addAndMakeVisible(colorButton);
-    addAndMakeVisible(cutoffLabel);
-    addAndMakeVisible(cutoffSlider);
-    addAndMakeVisible(gainLabel);
-    addAndMakeVisible(gainSlider);
-    addAndMakeVisible(slopeLabel);
-    addAndMakeVisible(slopeSlider);
-    addAndMakeVisible(qLabel);
-    addAndMakeVisible(qSlider);
+    mainContainer.addAndMakeVisible(analyzeButton);
+    mainContainer.addAndMakeVisible(diffButton);
+    mainContainer.addAndMakeVisible(bypassButton);
+    mainContainer.addAndMakeVisible(colorButton);
+    mainContainer.addAndMakeVisible(cutoffLabel);
+    mainContainer.addAndMakeVisible(cutoffSlider);
+    mainContainer.addAndMakeVisible(gainLabel);
+    mainContainer.addAndMakeVisible(gainSlider);
+    mainContainer.addAndMakeVisible(slopeLabel);
+    mainContainer.addAndMakeVisible(slopeSlider);
+    mainContainer.addAndMakeVisible(qLabel);
+    mainContainer.addAndMakeVisible(qSlider);
 
     setSize(900, 500);
 
@@ -198,6 +171,18 @@ HighPrecisionEQAudioProcessorEditor::~HighPrecisionEQAudioProcessorEditor()
 
 void HighPrecisionEQAudioProcessorEditor::paint(juce::Graphics& g)
 {
+    g.fillAll(juce::Colour(0xff12121e));
+}
+
+void HighPrecisionEQAudioProcessorEditor::resized()
+{
+    float scale = (float)getWidth() / 900.0f;
+    mainContainer.setBounds(0, 0, 900, 500);
+    mainContainer.setTransform(juce::AffineTransform::scale(scale));
+}
+
+void HighPrecisionEQAudioProcessorEditor::MainContainer::paint(juce::Graphics& g)
+{
     // 暗い背景
     g.fillAll(juce::Colour(0xff12121e));
 
@@ -216,19 +201,19 @@ void HighPrecisionEQAudioProcessorEditor::paint(juce::Graphics& g)
     g.drawText("v1.0.0", getWidth() - 65, 15, 50, 15, juce::Justification::right);
 }
 
-void HighPrecisionEQAudioProcessorEditor::resized()
+void HighPrecisionEQAudioProcessorEditor::MainContainer::resized()
 {
     auto area = getLocalBounds().reduced(20);
 
     // ヘッダー空間
     auto headerArea = area.removeFromTop(40);
-    analyzeButton.setBounds(headerArea.removeFromRight(80).withSizeKeepingCentre(80, 24));
+    editor.analyzeButton.setBounds(headerArea.removeFromRight(80).withSizeKeepingCentre(80, 24));
     headerArea.removeFromRight(10);
-    bypassButton.setBounds(headerArea.removeFromRight(80).withSizeKeepingCentre(80, 24));
+    editor.bypassButton.setBounds(headerArea.removeFromRight(80).withSizeKeepingCentre(80, 24));
     headerArea.removeFromRight(10);
-    colorButton.setBounds(headerArea.removeFromRight(80).withSizeKeepingCentre(80, 24));
+    editor.colorButton.setBounds(headerArea.removeFromRight(80).withSizeKeepingCentre(80, 24));
     headerArea.removeFromRight(10);
-    diffButton.setBounds(headerArea.removeFromRight(80).withSizeKeepingCentre(80, 24));
+    editor.diffButton.setBounds(headerArea.removeFromRight(80).withSizeKeepingCentre(80, 24));
 
     // コントロール行
     auto controlRow = area.removeFromBottom(120);
@@ -237,12 +222,12 @@ void HighPrecisionEQAudioProcessorEditor::resized()
     // ディスプレイ割り当て
     auto displayArea = area;
     
-    if (analyzeMode == AnalyzeMode::Waveform)
-        waveformDisplay.setBounds(displayArea);
-    else if (analyzeMode == AnalyzeMode::Phase)
-        phaseDisplay.setBounds(displayArea);
+    if (editor.analyzeMode == AnalyzeMode::Waveform)
+        editor.waveformDisplay.setBounds(displayArea);
+    else if (editor.analyzeMode == AnalyzeMode::Phase)
+        editor.phaseDisplay.setBounds(displayArea);
     else
-        freqDisplay.setBounds(displayArea);
+        editor.freqDisplay.setBounds(displayArea);
     
     int totalWidth = controlRow.getWidth();
     int knobW = 150;
@@ -264,27 +249,27 @@ void HighPrecisionEQAudioProcessorEditor::resized()
     
     // スライダーの表示切り替えと配置
     auto cutoffArea = controlRow.removeFromLeft(knobW);
-    cutoffLabel.setBounds(cutoffArea.removeFromTop(20));
-    cutoffSlider.setBounds(cutoffArea);
+    editor.cutoffLabel.setBounds(cutoffArea.removeFromTop(20));
+    editor.cutoffSlider.setBounds(cutoffArea);
     
     controlRow.removeFromLeft(gap);
     
     auto gainArea = controlRow.removeFromLeft(knobW);
-    gainLabel.setBounds(gainArea.removeFromTop(20));
-    gainSlider.setBounds(gainArea);
+    editor.gainLabel.setBounds(gainArea.removeFromTop(20));
+    editor.gainSlider.setBounds(gainArea);
     
     controlRow.removeFromLeft(gap);
     
     auto thirdKnobArea = controlRow.removeFromLeft(knobW);
-    if (currentBand == SelectedBand::LowCut || currentBand == SelectedBand::HighCut)
+    if (editor.currentBand == SelectedBand::LowCut || editor.currentBand == SelectedBand::HighCut)
     {
-        slopeLabel.setBounds(thirdKnobArea.removeFromTop(20));
-        slopeSlider.setBounds(thirdKnobArea);
+        editor.slopeLabel.setBounds(thirdKnobArea.removeFromTop(20));
+        editor.slopeSlider.setBounds(thirdKnobArea);
     }
     else
     {
-        qLabel.setBounds(thirdKnobArea.removeFromTop(20));
-        qSlider.setBounds(thirdKnobArea);
+        editor.qLabel.setBounds(thirdKnobArea.removeFromTop(20));
+        editor.qSlider.setBounds(thirdKnobArea);
     }
 
     // バンド選択ボタン
@@ -296,9 +281,9 @@ void HighPrecisionEQAudioProcessorEditor::resized()
     {
         auto btnGroup = bandsArea.removeFromLeft(static_cast<int>(btnW));
         bandsArea.removeFromLeft(static_cast<int>(btnGap));
-        bandButtons[i].setBounds(btnGroup.removeFromTop(26));
+        editor.bandButtons[i].setBounds(btnGroup.removeFromTop(26));
         btnGroup.removeFromTop(2);
-        enableButtons[i].setBounds(btnGroup.removeFromTop(16));
+        editor.enableButtons[i].setBounds(btnGroup.removeFromTop(16));
     }
 }
 
@@ -328,6 +313,12 @@ void HighPrecisionEQAudioProcessorEditor::selectBand(SelectedBand band)
 
 void HighPrecisionEQAudioProcessorEditor::updateAttachments()
 {
+    // アタッチメント変更時の不要な/不正な updateGraph() 呼び出しを防ぐ
+    cutoffSlider.onValueChange = nullptr;
+    gainSlider.onValueChange = nullptr;
+    slopeSlider.onValueChange = nullptr;
+    qSlider.onValueChange = nullptr;
+
     cutoffAttachment.reset();
     gainAttachment.reset();
     slopeAttachment.reset();
@@ -352,6 +343,12 @@ void HighPrecisionEQAudioProcessorEditor::updateAttachments()
         gainAttachment = std::make_unique<SliderAttachment>(processorRef.apvts, "bell_gain_" + idSuffix, gainSlider);
         qAttachment = std::make_unique<SliderAttachment>(processorRef.apvts, "bell_q_" + idSuffix, qSlider);
     }
+
+    // コールバックを再接続
+    cutoffSlider.onValueChange = [this]() { updateGraph(); };
+    gainSlider.onValueChange = [this]() { updateGraph(); };
+    slopeSlider.onValueChange = [this]() { updateGraph(); };
+    qSlider.onValueChange = [this]() { updateGraph(); };
 }
 
 void HighPrecisionEQAudioProcessorEditor::updateComponentColors()
@@ -405,4 +402,38 @@ void HighPrecisionEQAudioProcessorEditor::updateComponentColors()
     colorButton.setColour(juce::TextButton::textColourOffId, pal.text);
     
     diffButton.setColour(juce::TextButton::buttonOnColourId, pal.bell1.withAlpha(0.6f));
+}
+
+void HighPrecisionEQAudioProcessorEditor::updateGraph()
+{
+    double lcCutoff = processorRef.apvts.getRawParameterValue("cutoffHz")->load();
+    int lcSlope = static_cast<int>(processorRef.apvts.getRawParameterValue("slopeDbOct")->load());
+    int lcOrder = std::clamp(lcSlope / 12, 1, 8);
+    double lcGain = processorRef.apvts.getRawParameterValue("gainDb")->load();
+    bool lcEnable = processorRef.apvts.getRawParameterValue("lowcut_enable")->load() > 0.5f;
+
+    double hcFreq = processorRef.apvts.getRawParameterValue("highcut_freq")->load();
+    int hcSlope = static_cast<int>(processorRef.apvts.getRawParameterValue("highcut_slope")->load());
+    int hcOrder = std::clamp(hcSlope / 12, 1, 8);
+    bool hcEnable = processorRef.apvts.getRawParameterValue("highcut_enable")->load() > 0.5f;
+
+    std::array<FreqResponseDisplay::BellParam, 4> bells;
+    for (int i = 0; i < 4; ++i)
+    {
+        juce::String suffix = juce::String(i + 1);
+        bells[i].freq = processorRef.apvts.getRawParameterValue("bell_freq_" + suffix)->load();
+        bells[i].gain = processorRef.apvts.getRawParameterValue("bell_gain_" + suffix)->load();
+        bells[i].q = processorRef.apvts.getRawParameterValue("bell_q_" + suffix)->load();
+        bells[i].active = processorRef.apvts.getRawParameterValue("bell_enable_" + suffix)->load() > 0.5f;
+    }
+
+    freqDisplay.updateParameters(lcCutoff, lcOrder, lcGain, lcEnable,
+                                 hcFreq, hcOrder, hcEnable,
+                                 processorRef.getSampleRate(), bells);
+                                 
+    phaseDisplay.updateParameters(lcCutoff, lcOrder, lcGain, lcEnable,
+                                  hcFreq, hcOrder, hcEnable,
+                                  processorRef.getSampleRate(), bells);
+
+    updateComponentColors();
 }

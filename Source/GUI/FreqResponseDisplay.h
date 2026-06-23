@@ -36,6 +36,22 @@ public:
     float getMaxF() const noexcept { return currentMaxF; }
     HighPrecisionEQAudioProcessor* getProcessor() const noexcept { return processor; }
 
+    float logFToX(float f) const
+    {
+        float logMin = std::log10(currentMinF);
+        float logMax = std::log10(currentMaxF);
+        float val = (std::log10(f) - logMin) / (logMax - logMin);
+        return val * static_cast<float>(getWidth());
+    }
+
+    float xToLogF(float x) const
+    {
+        float logMin = std::log10(currentMinF);
+        float logMax = std::log10(currentMaxF);
+        float val = x / static_cast<float>(getWidth());
+        return std::pow(10.0f, logMin + val * (logMax - logMin));
+    }
+
     void mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) override;
 
 private:
@@ -73,8 +89,6 @@ private:
     std::vector<PrecomputedFreq> precomputedFreqs;
     void precomputeFrequencies();
 
-    float logFToX(float f) const;
-    float xToLogF(float x) const;
     float gainToY(float gainDecibels) const;
     float yToGain(float y) const;
     float analyzerGainToY(float gainDecibels) const;
