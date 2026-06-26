@@ -69,7 +69,14 @@ void MinimumPhaseEQ::updateParameters(double lowCutFreq, int lowCutOrder, bool l
             sec.isFirstOrder = false;
             
             double angle = std::numbers::pi * (2.0 * k + 1.0) / (2.0 * order);
-            sec.q = 1.0 / (2.0 * std::sin(angle));
+            double Q_butterworth = 1.0 / (2.0 * std::sin(angle));
+            
+            // Bessel-Butterworth ハイブリッド: ポストエコー（リンギング）抑制
+            // 先頭セクションのQを控えめに、後段はButterworth本来のQを維持
+            constexpr double alpha = 0.25;  // スムージング強度
+            constexpr double beta  = 1.2;   // 後段への減衰率
+            double smoothing = 1.0 - alpha * std::exp(-beta * static_cast<double>(k));
+            sec.q = Q_butterworth * smoothing;
 
             sec.updateCoefficients(currentSampleRate);
             newSections.push_back(sec);
@@ -103,7 +110,14 @@ void MinimumPhaseEQ::updateParameters(double lowCutFreq, int lowCutOrder, bool l
             sec.isFirstOrder = false;
 
             double angle = std::numbers::pi * (2.0 * k + 1.0) / (2.0 * order);
-            sec.q = 1.0 / (2.0 * std::sin(angle));
+            double Q_butterworth = 1.0 / (2.0 * std::sin(angle));
+            
+            // Bessel-Butterworth ハイブリッド: ポストエコー（リンギング）抑制
+            // 先頭セクションのQを控えめに、後段はButterworth本来のQを維持
+            constexpr double alpha = 0.25;  // スムージング強度
+            constexpr double beta  = 1.2;   // 後段への減衰率
+            double smoothing = 1.0 - alpha * std::exp(-beta * static_cast<double>(k));
+            sec.q = Q_butterworth * smoothing;
 
             sec.updateCoefficients(currentSampleRate);
             newSections.push_back(sec);
@@ -332,6 +346,31 @@ void MinimumPhaseEQ::optimizeBells(std::array<BellParam, 4>& optimizedBells)
 
         if (converged)
             break;
+    }
+
+    // 位相歪み対策: 近接バンド間のQ相互干渉補正
+    // 2つのBellバンドの中心周波数が1オクターブ以内に近接している場合、
+    // 両方のQを自動的に下げて位相回転の急変を平滑化する
+    for (int i = 0; i < 4; ++i)
+    {
+        if (!optimizedBells[static_cast<size_t>(i)].active) continue;
+        for (int j = i + 1; j < 4; ++j)
+        {
+            if (!optimizedBells[static_cast<size_t>(j)].active) continue;
+
+            double ratio = optimizedBells[static_cast<size_t>(i)].freq
+                         / optimizedBells[static_cast<size_t>(j)].freq;
+            if (ratio < 1.0) ratio = 1.0 / ratio;
+
+            // 1オクターブ以内の近接バンド
+            if (ratio < 2.0)
+            {
+                double proximity = 1.0 - (ratio - 1.0);  // 0〜1 (近いほど1)
+                double qReduction = 1.0 - 0.2 * proximity;
+                optimizedBells[static_cast<size_t>(i)].q *= qReduction;
+                optimizedBells[static_cast<size_t>(j)].q *= qReduction;
+            }
+        }
     }
 }
 

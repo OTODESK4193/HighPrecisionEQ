@@ -101,12 +101,12 @@ private:
     void mouseDoubleClick(const juce::MouseEvent& e) override;
     void modifierKeysChanged(const juce::ModifierKeys& modifiers) override;
 
-    float currentMinF = 10.0f, currentMaxF = 20000.0f;
+    float currentMinF = 1.0f, currentMaxF = 25000.0f;
     float currentMinDb = -12.0f, currentMaxDb = 12.0f;
     float analyzerGainOffsetDb = 0.0f;
     uint64_t lastSeenUpdateCount = 0;
 
-    float dragStartMinF = 10.0f, dragStartMaxF = 20000.0f;
+    float dragStartMinF = 1.0f, dragStartMaxF = 25000.0f;
     float dragStartMinDb = -12.0f;
 
     juce::TextButton zoomInXBtn{ "H+" }, zoomOutXBtn{ "H-" }, zoomInYBtn{ "V+" }, zoomOutYBtn{ "V-" };

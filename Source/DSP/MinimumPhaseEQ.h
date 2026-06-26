@@ -59,7 +59,7 @@ public:
                 return;
             }
 
-            double f_safe = std::clamp(freq, 10.0, sr * 0.49);
+            double f_safe = std::clamp(freq, 1.0, sr * 0.49);
             double wd = 2.0 * std::numbers::pi * f_safe;
             double T = 1.0 / sr;
             g = std::tan(wd * T / 2.0);

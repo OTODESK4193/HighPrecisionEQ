@@ -24,8 +24,8 @@ void AnalyzerDSP::prepare(double newSampleRate)
 {
     sampleRate = newSampleRate;
     
-    double fmin = 10.0;
-    double fmax = std::min(24000.0, sampleRate * 0.49);
+    double fmin = 1.0;
+    double fmax = std::min(25000.0, sampleRate * 0.49);
     double Q = 24.0; // ユーザー指定の Q = 24.0
     
     for (int i = 0; i < NumBands; ++i)

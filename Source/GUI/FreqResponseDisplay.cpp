@@ -39,7 +39,7 @@ FreqResponseDisplay::FreqResponseDisplay()
         currentMinF = centerLog / std::sqrt(newRatio);
         currentMaxF = centerLog * std::sqrt(newRatio);
         if (currentMinF < 1.0f) currentMinF = 1.0f;
-        if (currentMaxF > 24000.0f) currentMaxF = 24000.0f;
+        if (currentMaxF > 25000.0f) currentMaxF = 25000.0f;
         pathNeedsRecalculation = true;
         repaint();
     };
@@ -51,7 +51,7 @@ FreqResponseDisplay::FreqResponseDisplay()
         currentMinF = centerLog / std::sqrt(newRatio);
         currentMaxF = centerLog * std::sqrt(newRatio);
         if (currentMinF < 1.0f) currentMinF = 1.0f;
-        if (currentMaxF > 24000.0f) currentMaxF = 24000.0f;
+        if (currentMaxF > 25000.0f) currentMaxF = 25000.0f;
         pathNeedsRecalculation = true;
         repaint();
     };
@@ -263,7 +263,7 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
     else
     {
         // 従来の対数グリッド
-        float gridFreqs[] = { 20.0f, 50.0f, 100.0f, 200.0f, 500.0f, 1000.0f, 2000.0f, 5000.0f, 10000.0f, 20000.0f };
+        float gridFreqs[] = { 1.0f, 2.0f, 5.0f, 10.0f, 20.0f, 50.0f, 100.0f, 200.0f, 500.0f, 1000.0f, 2000.0f, 5000.0f, 10000.0f, 20000.0f, 25000.0f };
         float lastLabelX = -100.0f;
         for (float f : gridFreqs)
         {
@@ -804,7 +804,7 @@ void FreqResponseDisplay::mouseDrag(const juce::MouseEvent& e)
 
         if (activeDragBand == 0) // LowCut
         {
-            float targetFreq = std::clamp(dragFreq, 20.0f, 500.0f);
+            float targetFreq = std::clamp(dragFreq, 1.0f, 500.0f);
             float targetGain = std::clamp(dragGain, -10.0f, 0.0f);
 
             auto rangeF = apvts.getParameterRange("cutoffHz");
@@ -815,7 +815,7 @@ void FreqResponseDisplay::mouseDrag(const juce::MouseEvent& e)
         }
         else if (activeDragBand == 1) // HighCut
         {
-            float targetFreq = std::clamp(dragFreq, 20.0f, 20000.0f);
+            float targetFreq = std::clamp(dragFreq, 20.0f, 25000.0f);
 
             auto rangeF = apvts.getParameterRange("highcut_freq");
             apvts.getParameter("highcut_freq")->setValueNotifyingHost(rangeF.convertTo0to1(targetFreq));
@@ -825,7 +825,7 @@ void FreqResponseDisplay::mouseDrag(const juce::MouseEvent& e)
             int idx = activeDragBand - 1; // Bell1..4 (1-indexed suffix: 1..4)
             juce::String idSuffix = juce::String(idx);
             
-            float targetFreq = std::clamp(dragFreq, 20.0f, 20000.0f);
+            float targetFreq = std::clamp(dragFreq, 1.0f, 25000.0f);
             float targetGain = std::clamp(dragGain, -18.0f, 18.0f);
 
             juce::String freqID = "bell_freq_" + idSuffix;
@@ -885,8 +885,8 @@ void FreqResponseDisplay::mouseUp(const juce::MouseEvent&)
 void FreqResponseDisplay::mouseDoubleClick(const juce::MouseEvent&)
 {
     // ダブルクリックでズーム初期化
-    currentMinF = 10.0f;
-    currentMaxF = 20000.0f;
+    currentMinF = 1.0f;
+    currentMaxF = 25000.0f;
     currentMinDb = -12.0f;
     currentMaxDb = 12.0f;
     analyzerGainOffsetDb = 0.0f;
@@ -920,7 +920,7 @@ void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::
         if (ratio >= 1.002f && ratio <= 2400.0f)
         {
             currentMinF = std::max(newMinF, 1.0f);
-            currentMaxF = std::min(newMaxF, 24000.0f);
+            currentMaxF = std::min(newMaxF, 25000.0f);
             pathNeedsRecalculation = true;
             repaint();
         }

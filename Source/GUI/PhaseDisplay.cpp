@@ -87,8 +87,8 @@ void PhaseDisplay::paint(juce::Graphics& g)
     int w = bounds.getWidth();
     int h = bounds.getHeight();
 
-    float minF = responseDisplay != nullptr ? responseDisplay->getMinF() : 10.0f;
-    float maxF = responseDisplay != nullptr ? responseDisplay->getMaxF() : 20000.0f;
+    float minF = responseDisplay != nullptr ? responseDisplay->getMinF() : 1.0f;
+    float maxF = responseDisplay != nullptr ? responseDisplay->getMaxF() : 25000.0f;
 
     // 1. 周波数グリッド描画 (ズームに応じた適応型動的グリッド)
     float range = maxF - minF;
@@ -154,7 +154,7 @@ void PhaseDisplay::paint(juce::Graphics& g)
     else
     {
         // 従来の対数グリッド
-        float gridFreqs[] = { 20.0f, 50.0f, 100.0f, 200.0f, 500.0f, 1000.0f, 2000.0f, 5000.0f, 10000.0f, 20000.0f };
+        float gridFreqs[] = { 1.0f, 2.0f, 5.0f, 10.0f, 20.0f, 50.0f, 100.0f, 200.0f, 500.0f, 1000.0f, 2000.0f, 5000.0f, 10000.0f, 20000.0f, 25000.0f };
         float lastLabelX = -100.0f;
         for (float f : gridFreqs)
         {
@@ -226,8 +226,8 @@ void PhaseDisplay::drawAnalyzerSpectrum(juce::Graphics& g, juce::Rectangle<int> 
     float h = static_cast<float>(bounds.getHeight());
     float xOffset = static_cast<float>(bounds.getX());
 
-    float minF = responseDisplay != nullptr ? responseDisplay->getMinF() : 10.0f;
-    float maxF = responseDisplay != nullptr ? responseDisplay->getMaxF() : 20000.0f;
+    float minF = responseDisplay != nullptr ? responseDisplay->getMinF() : 1.0f;
+    float maxF = responseDisplay != nullptr ? responseDisplay->getMaxF() : 25000.0f;
 
     std::vector<float> energies = analyzer->getEnergies();
     
@@ -309,8 +309,8 @@ void PhaseDisplay::drawPhaseCurve(juce::Graphics& g, juce::Rectangle<int> bounds
     int w = bounds.getWidth();
     int h = bounds.getHeight();
 
-    float minF = responseDisplay != nullptr ? responseDisplay->getMinF() : 10.0f;
-    float maxF = responseDisplay != nullptr ? responseDisplay->getMaxF() : 20000.0f;
+    float minF = responseDisplay != nullptr ? responseDisplay->getMinF() : 1.0f;
+    float maxF = responseDisplay != nullptr ? responseDisplay->getMaxF() : 25000.0f;
 
     float maxPhase = static_cast<float>(std::numbers::pi) * phaseZoomFactor;
     float minPhase = -maxPhase;
