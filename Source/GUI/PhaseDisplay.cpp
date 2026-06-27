@@ -27,7 +27,7 @@ void PhaseDisplay::vblankUpdate()
 }
 
 void PhaseDisplay::updateParameters(double cutoffHz, int order, double gainDb, bool lowcutEnable,
-                                    double highCutFreq, int highCutOrder, bool highCutEnable,
+                                    double highCutFreq, int highCutOrder, double highCutGainDb, bool highCutEnable,
                                     double sampleRate, const std::array<FreqResponseDisplay::BellParam, 4>& bells)
 {
     currentCutoff = cutoffHz;
@@ -36,6 +36,7 @@ void PhaseDisplay::updateParameters(double cutoffHz, int order, double gainDb, b
     currentLowcutEnable = lowcutEnable;
     currentHighCutFreq = highCutFreq;
     currentHighCutOrder = highCutOrder;
+    currentHighCutGainDb = highCutGainDb;
     currentHighCutEnable = highCutEnable;
     currentSampleRate = sampleRate;
     bellParams = bells;
@@ -338,8 +339,8 @@ void PhaseDisplay::drawPhaseCurve(juce::Graphics& g, juce::Rectangle<int> bounds
         localBells[i].active = bellParams[i].active;
     }
     localEQ.prepare(currentSampleRate, 512);
-    localEQ.updateParameters(currentCutoff, currentOrder, currentLowcutEnable,
-                             currentHighCutFreq, currentHighCutOrder, currentHighCutEnable,
+    localEQ.updateParameters(currentCutoff, currentOrder, currentLowcutEnable, currentGainDb,
+                             currentHighCutFreq, currentHighCutOrder, currentHighCutEnable, currentHighCutGainDb,
                              localBells);
 
     // 位相遅延計算のサブルーチン

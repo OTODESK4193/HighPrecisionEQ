@@ -101,111 +101,85 @@ public:
             }
         }
 
-        // 周波数レスポンス計算 (GUIプロット用)
+        // 周波数レスポンス計算 (GUIプロット用) - TPT SVF 数値安定版
         double getMagnitudeForFrequency(double f, double sr) const
         {
             if (!active || type == Type::Bypass) return 1.0;
 
-            double w = 2.0 * std::numbers::pi * f / sr;
-            double cosw = std::cos(w);
-            double cos2w = std::cos(2.0 * w);
-
-            double b0 = 1.0, b1 = 0.0, b2 = 0.0;
-            double a0 = 1.0, a1 = 0.0, a2 = 0.0;
+            // アナログプリワーピング周波数 Ω = std::tan(π * f / sr)
+            double omega = std::tan(std::numbers::pi * f / sr);
+            
+            // フィルターのカットオフに対するプリワーピング周波数 g_val = std::tan(π * fc / sr)
+            double cutoff_safe = std::clamp(freq, 1.0, sr * 0.49);
+            double g_val = std::tan(std::numbers::pi * cutoff_safe / sr);
+            
+            if (g_val <= 0.0) return 1.0;
+            
+            double R = omega / g_val;
+            double R2 = R * R;
 
             if (type == Type::HighPass)
             {
                 if (isFirstOrder)
                 {
-                    // 1次HPF: H(z) = (1 - z^-1) / ((1+1/g) - (1-1/g)z^-1)
-                    double g_inv = 1.0 / g;
-                    a0 = 1.0 + g_inv;
-                    double a1_raw = 1.0 - g_inv;
-                    b0 = 1.0 / a0;
-                    b1 = -1.0 / a0;
-                    a1 = a1_raw / a0;
-                    
-                    double numRe = b0 + b1 * cosw;
-                    double numIm = -b1 * std::sin(w);
-                    double denRe = 1.0 + a1 * cosw;
-                    double denIm = -a1 * std::sin(w);
-                    return std::sqrt((numRe * numRe + numIm * numIm) / (denRe * denRe + denIm * denIm));
+                    // 1次HPF: |H| = R / sqrt(R^2 + 1)
+                    return R / std::sqrt(R2 + 1.0);
                 }
                 else
                 {
-                    // 2次HPF: Butterworth
-                    double alpha = std::sin(2.0 * std::numbers::pi * freq / sr) / (2.0 * q);
-                    double cosw0 = std::cos(2.0 * std::numbers::pi * freq / sr);
-                    a0 = 1.0 + alpha;
-                    b0 = ((1.0 + cosw0) / 2.0) / a0;
-                    b1 = (-(1.0 + cosw0)) / a0;
-                    b2 = ((1.0 + cosw0) / 2.0) / a0;
-                    a1 = (-2.0 * cosw0) / a0;
-                    a2 = (1.0 - alpha) / a0;
+                    // 2次HPF: |H| = R^2 / sqrt((1 - R^2)^2 + (R/Q)^2)
+                    double q_safe = std::max(q, 0.1);
+                    double denomSq = (1.0 - R2) * (1.0 - R2) + (R / q_safe) * (R / q_safe);
+                    if (denomSq <= 0.0) return 1.0;
+                    return R2 / std::sqrt(denomSq);
                 }
             }
             else if (type == Type::LowPass)
             {
                 if (isFirstOrder)
                 {
-                    // 1次LPF
-                    double g_inv = 1.0 / g;
-                    a0 = 1.0 + g_inv;
-                    double a1_raw = 1.0 - g_inv;
-                    b0 = 1.0 / a0;
-                    b1 = 1.0 / a0;
-                    a1 = a1_raw / a0;
-
-                    double numRe = b0 + b1 * cosw;
-                    double numIm = -b1 * std::sin(w);
-                    double denRe = 1.0 + a1 * cosw;
-                    double denIm = -a1 * std::sin(w);
-                    return std::sqrt((numRe * numRe + numIm * numIm) / (denRe * denRe + denIm * denIm));
+                    // 1次LPF: |H| = 1 / sqrt(R^2 + 1)
+                    return 1.0 / std::sqrt(R2 + 1.0);
                 }
                 else
                 {
-                    // 2次LPF
-                    double alpha = std::sin(2.0 * std::numbers::pi * freq / sr) / (2.0 * q);
-                    double cosw0 = std::cos(2.0 * std::numbers::pi * freq / sr);
-                    a0 = 1.0 + alpha;
-                    b0 = ((1.0 - cosw0) / 2.0) / a0;
-                    b1 = (1.0 - cosw0) / a0;
-                    b2 = ((1.0 - cosw0) / 2.0) / a0;
-                    a1 = (-2.0 * cosw0) / a0;
-                    a2 = (1.0 - alpha) / a0;
+                    // 2次LPF: |H| = 1 / sqrt((1 - R^2)^2 + (R/Q)^2)
+                    double q_safe = std::max(q, 0.1);
+                    double denomSq = (1.0 - R2) * (1.0 - R2) + (R / q_safe) * (R / q_safe);
+                    if (denomSq <= 0.0) return 1.0;
+                    return 1.0 / std::sqrt(denomSq);
                 }
             }
             else if (type == Type::Bell)
             {
-                double A = std::pow(10.0, gain / 40.0);
-                double w0 = 2.0 * std::numbers::pi * freq / sr;
-                double alpha = std::sin(w0) / (2.0 * q);
-                a0 = 1.0 + alpha / A;
-                b0 = (1.0 + alpha * A) / a0;
-                b1 = (-2.0 * std::cos(w0)) / a0;
-                b2 = (1.0 - alpha * A) / a0;
-                a1 = (-2.0 * std::cos(w0)) / a0;
-                a2 = (1.0 - alpha / A) / a0;
+                double q_safe = std::max(q, 0.05);
+                double V = std::pow(10.0, gain / 20.0);
+                
+                double r_over_q = R / q_safe;
+                double termNum = r_over_q * V;
+                double termDen = r_over_q / V;
+                
+                double numSq = (1.0 - R2) * (1.0 - R2) + termNum * termNum;
+                double denSq = (1.0 - R2) * (1.0 - R2) + termDen * termDen;
+                
+                if (gain < 0.0)
+                {
+                    std::swap(numSq, denSq);
+                }
+                
+                if (denSq <= 0.0) return 1.0;
+                return std::sqrt(numSq / denSq);
             }
 
-            double numRe = b0 + b1 * cosw + b2 * cos2w;
-            double numIm = -b1 * std::sin(w) - b2 * std::sin(2.0 * w);
-            double numMagSq = numRe * numRe + numIm * numIm;
-
-            double denRe = 1.0 + a1 * cosw + a2 * cos2w;
-            double denIm = -a1 * std::sin(w) - a2 * std::sin(2.0 * w);
-            double denMagSq = denRe * denRe + denIm * denIm;
-
-            if (denMagSq <= 0.0) return 1.0;
-            return std::sqrt(numMagSq / denMagSq);
+            return 1.0;
         }
     };
 
     void prepare(double sampleRate, int maxBlockSize);
     void reset();
 
-    void updateParameters(double lowCutFreq, int lowCutOrder, bool lowCutEnable,
-                          double highCutFreq, int highCutOrder, bool highCutEnable,
+    void updateParameters(double lowCutFreq, int lowCutOrder, bool lowCutEnable, double lowCutGainDb,
+                          double highCutFreq, int highCutOrder, bool highCutEnable, double highCutGainDb,
                           const std::array<BellParam, 4>& bells);
 
     void process(juce::AudioBuffer<float>& buffer);
@@ -216,6 +190,14 @@ public:
 private:
     double currentSampleRate = 44100.0;
     int currentMaxBlockSize = 512;
+
+    double currentLowCutGainDb = -10.0;
+    double currentHighCutGainDb = -10.0;
+    double lowCutMix = 1.0;
+    double highCutMix = 1.0;
+
+    bool currentLowCutEnable = true;
+    bool currentHighCutEnable = false;
 
     static constexpr size_t MaxSections = 12;
     std::vector<FilterSection> activeSections;

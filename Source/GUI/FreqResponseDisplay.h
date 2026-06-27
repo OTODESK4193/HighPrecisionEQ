@@ -24,7 +24,7 @@ public:
     };
 
     void updateParameters(double cutoffHz, int order, double gainDb, bool lowcutEnable,
-                          double highCutFreq, int highCutOrder, bool highCutEnable,
+                          double highCutFreq, int highCutOrder, double highCutGainDb, bool highCutEnable,
                           double sampleRate, const std::array<BellParam, 4>& bells);
 
     void setColorPaletteIndex(int index);
@@ -72,6 +72,7 @@ private:
     bool   currentLowcutEnable = true;
     double currentHighCutFreq = 20000.0;
     int    currentHighCutOrder = 2;
+    double currentHighCutGainDb = -10.0;
     bool   currentHighCutEnable = false;
     std::array<BellParam, 4> bellParams;
 

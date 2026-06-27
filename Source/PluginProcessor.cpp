@@ -103,6 +103,14 @@ HighPrecisionEQAudioProcessor::createParameterLayout()
         false
     ));
 
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{ "highcut_gainDb", 1 },
+        "HighCut Gain",
+        juce::NormalisableRange<float>(-10.0f, 0.0f, 0.1f),
+        -10.0f,
+        juce::AudioParameterFloatAttributes().withLabel("dB")
+    ));
+
     return { params.begin(), params.end() };
 }
 
@@ -179,6 +187,7 @@ void HighPrecisionEQAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
     int hcOrder = static_cast<int>(std::round(hcSlope / 12.0f));
     hcOrder = std::clamp(hcOrder, 1, 8);
     bool hcEnable = apvts.getRawParameterValue("highcut_enable")->load() > 0.5f;
+    float hcGainDb = apvts.getRawParameterValue("highcut_gainDb")->load();
 
     bool listenDiff = apvts.getRawParameterValue("listenDiff")->load() > 0.5f;
     bool bypass = apvts.getRawParameterValue("bypass")->load() > 0.5f;
@@ -229,8 +238,8 @@ void HighPrecisionEQAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
     if (!isSuspended)
     {
         minimumPhaseEQ.updateParameters(
-            static_cast<double>(cutoffHz), order, lowcut_enable,
-            static_cast<double>(hcFreq), hcOrder, hcEnable,
+            static_cast<double>(cutoffHz), order, lowcut_enable, static_cast<double>(gainDb),
+            static_cast<double>(hcFreq), hcOrder, hcEnable, static_cast<double>(hcGainDb),
             bells
         );
         minimumPhaseEQ.process(buffer);

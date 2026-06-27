@@ -284,10 +284,9 @@ void HighPrecisionEQAudioProcessorEditor::selectBand(SelectedBand band)
     qSlider.setVisible(!isCut);
     qLabel.setVisible(!isCut);
     
-    // HighCut のときは Gain は意味を持たないので隠すか無効にする
-    bool isHighCut = (band == SelectedBand::HighCut);
-    gainSlider.setVisible(!isHighCut);
-    gainLabel.setVisible(!isHighCut);
+    // HighCut のときも Gain が有効になるので、gainSlider は常に表示
+    gainSlider.setVisible(true);
+    gainLabel.setVisible(true);
     
     updateComponentColors();
     
@@ -319,6 +318,7 @@ void HighPrecisionEQAudioProcessorEditor::updateAttachments()
     {
         cutoffAttachment = std::make_unique<SliderAttachment>(processorRef.apvts, "highcut_freq", cutoffSlider);
         slopeAttachment = std::make_unique<SliderAttachment>(processorRef.apvts, "highcut_slope", slopeSlider);
+        gainAttachment = std::make_unique<SliderAttachment>(processorRef.apvts, "highcut_gainDb", gainSlider);
     }
     else
     {
@@ -400,6 +400,7 @@ void HighPrecisionEQAudioProcessorEditor::updateGraph()
     double hcFreq = processorRef.apvts.getRawParameterValue("highcut_freq")->load();
     int hcSlope = static_cast<int>(processorRef.apvts.getRawParameterValue("highcut_slope")->load());
     int hcOrder = std::clamp(hcSlope / 12, 1, 8);
+    double hcGain = processorRef.apvts.getRawParameterValue("highcut_gainDb")->load();
     bool hcEnable = processorRef.apvts.getRawParameterValue("highcut_enable")->load() > 0.5f;
 
     std::array<FreqResponseDisplay::BellParam, 4> bells;
@@ -413,11 +414,11 @@ void HighPrecisionEQAudioProcessorEditor::updateGraph()
     }
 
     freqDisplay.updateParameters(lcCutoff, lcOrder, lcGain, lcEnable,
-                                 hcFreq, hcOrder, hcEnable,
+                                 hcFreq, hcOrder, hcGain, hcEnable,
                                  processorRef.getSampleRate(), bells);
                                  
     phaseDisplay.updateParameters(lcCutoff, lcOrder, lcGain, lcEnable,
-                                  hcFreq, hcOrder, hcEnable,
+                                  hcFreq, hcOrder, hcGain, hcEnable,
                                   processorRef.getSampleRate(), bells);
 
     updateComponentColors();

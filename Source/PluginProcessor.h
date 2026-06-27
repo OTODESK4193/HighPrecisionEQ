@@ -56,6 +56,8 @@ public:
 
     SPSCSlotQueue<WaveformSnapshot>& getSnapshotQueue() { return snapshotQueue; }
     AnalyzerDSP& getAnalyzer() { return analyzerDSP; }
+    MinimumPhaseEQ& getEQ() noexcept { return minimumPhaseEQ; }
+    const MinimumPhaseEQ& getEQ() const noexcept { return minimumPhaseEQ; }
 
     int currentPaletteIdx = 0;
 

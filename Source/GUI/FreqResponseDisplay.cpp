@@ -126,7 +126,7 @@ void FreqResponseDisplay::setSelectedBand(int bandIdx)
 }
 
 void FreqResponseDisplay::updateParameters(double cutoffHz, int order, double gainDb, bool lowcutEnable,
-                                           double highCutFreq, int highCutOrder, bool highCutEnable,
+                                           double highCutFreq, int highCutOrder, double highCutGainDb, bool highCutEnable,
                                            double sampleRate, const std::array<BellParam, 4>& bells)
 {
     currentCutoffHz = cutoffHz;
@@ -135,6 +135,7 @@ void FreqResponseDisplay::updateParameters(double cutoffHz, int order, double ga
     currentLowcutEnable = lowcutEnable;
     currentHighCutFreq = highCutFreq;
     currentHighCutOrder = highCutOrder;
+    currentHighCutGainDb = highCutGainDb;
     currentHighCutEnable = highCutEnable;
     currentSampleRate = sampleRate;
     bellParams = bells;
@@ -373,186 +374,34 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
 
         cachedResponsePath.clear();
 
-        // 1. Bells の事前計算
-        struct PrecomputedBell {
-            bool active = false;
-            double b0, b1, b2, a1, a2;
-        };
-        std::array<PrecomputedBell, 4> prepBells;
-        for (int i = 0; i < 4; ++i)
+        if (processor != nullptr)
         {
-            const auto& bp = bellParams[i];
-            if (!bp.active || std::abs(bp.gain) < 0.01)
+            bool started = false;
+            for (int x = 0; x < w; ++x)
             {
-                prepBells[i].active = false;
-                continue;
-            }
-            prepBells[i].active = true;
-            
-            double A = std::pow(10.0, bp.gain / 40.0);
-            double w0 = 2.0 * std::numbers::pi * bp.freq / currentSampleRate;
-            double alpha = std::sin(w0) / (2.0 * bp.q);
-            
-            double a0 = 1.0 + alpha / A;
-            prepBells[i].b0 = (1.0 + alpha * A) / a0;
-            prepBells[i].b1 = (-2.0 * std::cos(w0)) / a0;
-            prepBells[i].b2 = (1.0 - alpha * A) / a0;
-            prepBells[i].a1 = (-2.0 * std::cos(w0)) / a0;
-            prepBells[i].a2 = (1.0 - alpha / A) / a0;
-        }
+                if (static_cast<size_t>(x) >= precomputedFreqs.size()) break;
+                const auto& pf = precomputedFreqs[static_cast<size_t>(x)];
 
-        auto getBellMagCached = [](double cosw, double sinw, double cos2w, double sin2w, const PrecomputedBell& pb) {
-            if (!pb.active) return 1.0;
-            
-            double numRe = pb.b0 + pb.b1 * cosw + pb.b2 * cos2w;
-            double numIm = -pb.b1 * sinw - pb.b2 * sin2w;
-            double numMagSq = numRe * numRe + numIm * numIm;
-            
-            double denRe = 1.0 + pb.a1 * cosw + pb.a2 * cos2w;
-            double denIm = -pb.a1 * sinw - pb.a2 * sin2w;
-            double denMagSq = denRe * denRe + denIm * denIm;
-            
-            if (denMagSq <= 0.0) return 1.0;
-            return std::sqrt(numMagSq / denMagSq);
-        };
+                // TPT SVF EQから直接正確かつ数値的に完全に安定な振幅応答を取得する
+                double totalMag = processor->getEQ().getMagnitudeForFrequency(pf.f);
 
-        // 2. HighCut (LowPass) の事前計算
-        struct PrecomputedCut {
-            bool active = false;
-            double b0, b1, b2, a1, a2;
-            bool isFirstOrder = false;
-        };
-        std::vector<PrecomputedCut> prepHighCuts;
-        if (currentHighCutEnable && currentHighCutOrder > 0)
-        {
-            int order = std::clamp(currentHighCutOrder, 1, 8);
-            int numBiquads = order / 2;
-            bool hasFirstOrder = (order % 2) != 0;
-            
-            double w0 = 2.0 * std::numbers::pi * currentHighCutFreq / currentSampleRate;
-            double cosw0 = std::cos(w0);
-            double sinw0 = std::sin(w0);
-            
-            if (hasFirstOrder)
-            {
-                PrecomputedCut sec;
-                sec.active = true;
-                sec.isFirstOrder = true;
-                
-                double K = std::tan(w0 / 2.0);
-                double norm = 1.0 / (1.0 + K);
-                sec.b0 = K * norm;
-                sec.b1 = K * norm;
-                sec.b2 = 0.0;
-                sec.a1 = (K - 1.0) * norm;
-                sec.a2 = 0.0;
-                prepHighCuts.push_back(sec);
-            }
-            
-            for (int k = 0; k < numBiquads; ++k)
-            {
-                PrecomputedCut sec;
-                sec.active = true;
-                sec.isFirstOrder = false;
-                
-                double angle = std::numbers::pi * (2.0 * k + 1.0) / (2.0 * order);
-                double Q = 1.0 / (2.0 * std::sin(angle));
-                
-                double alpha = sinw0 / (2.0 * Q);
-                double a0 = 1.0 + alpha;
-                double a0_inv = 1.0 / a0;
-                
-                sec.b0 = (1.0 - cosw0) * 0.5 * a0_inv;
-                sec.b1 = (1.0 - cosw0) * a0_inv;
-                sec.b2 = (1.0 - cosw0) * 0.5 * a0_inv;
-                sec.a1 = -2.0 * cosw0 * a0_inv;
-                sec.a2 = (1.0 - alpha) * a0_inv;
-                prepHighCuts.push_back(sec);
-            }
-        }
+                // NaN/inf ガード
+                if (std::isnan(totalMag) || std::isinf(totalMag)) totalMag = 1.0;
+                totalMag = std::max(totalMag, 1e-10);
 
-        // 3. LowCut (HighPass) の計算
-        auto sos = SOSCoefficients::computeHighPass(currentCutoffHz, currentSampleRate, currentOrder, currentGainDb);
-        double mix = std::clamp(std::abs(currentGainDb) / 10.0, 0.0, 1.0);
+                double magDb = 20.0 * std::log10(totalMag);
+                float y = gainToY(static_cast<float>(magDb));
+                y = std::clamp(y, -100.0f, static_cast<float>(h) + 100.0f);
 
-        bool started = false;
-        for (int x = 0; x < w; ++x)
-        {
-            if (static_cast<size_t>(x) >= precomputedFreqs.size()) break;
-            const auto& pf = precomputedFreqs[static_cast<size_t>(x)];
-
-            // LowCut (HighPass) 応答計算
-            double wetMagSq = 1.0;
-            for (const auto& sec : sos)
-            {
-                double numReal = sec.b0 + sec.b1 * pf.cosw + sec.b2 * pf.cos2w;
-                double numImag = -(sec.b1 * pf.sinw + sec.b2 * pf.sin2w);
-                double numMagSq = numReal * numReal + numImag * numImag;
-                
-                double denReal = 1.0 + sec.a1 * pf.cosw + sec.a2 * pf.cos2w;
-                double denImag = -(sec.a1 * pf.sinw + sec.a2 * pf.sin2w);
-                double denMagSq = denReal * denReal + denImag * denImag;
-                
-                if (denMagSq > 1e-15)
-                    wetMagSq *= (numMagSq / denMagSq);
-            }
-
-            double totalMag = 1.0;
-            if (currentLowcutEnable) {
-                totalMag = (1.0 - mix) + mix * std::sqrt(std::max(wetMagSq, 0.0));
-            }
-
-            // HighCut (LowPass) 応答計算
-            double hcMag = 1.0;
-            for (const auto& sec : prepHighCuts)
-            {
-                if (sec.isFirstOrder)
+                if (!started)
                 {
-                    double numRe = sec.b0 + sec.b1 * pf.cosw;
-                    double numIm = -sec.b1 * pf.sinw;
-                    double denRe = 1.0 + sec.a1 * pf.cosw;
-                    double denIm = -sec.a1 * pf.sinw;
-                    double denMagSq = denRe * denRe + denIm * denIm;
-                    if (denMagSq > 1e-15)
-                        hcMag *= std::sqrt((numRe * numRe + numIm * numIm) / denMagSq);
+                    cachedResponsePath.startNewSubPath(static_cast<float>(x), y);
+                    started = true;
                 }
                 else
                 {
-                    double numRe = sec.b0 + sec.b1 * pf.cosw + sec.b2 * pf.cos2w;
-                    double numIm = -sec.b1 * pf.sinw - sec.b2 * pf.sin2w;
-                    double numMagSq = numRe * numRe + numIm * numIm;
-                    
-                    double denRe = 1.0 + sec.a1 * pf.cosw + sec.a2 * pf.cos2w;
-                    double denIm = -sec.a1 * pf.sinw - sec.a2 * pf.sin2w;
-                    double denMagSq = denRe * denRe + denIm * denIm;
-                    
-                    if (denMagSq > 1e-15)
-                        hcMag *= std::sqrt(numMagSq / denMagSq);
+                    cachedResponsePath.lineTo(static_cast<float>(x), y);
                 }
-            }
-            totalMag *= hcMag;
-
-            // Bells 応答計算
-            for (int i = 0; i < 4; ++i) {
-                totalMag *= getBellMagCached(pf.cosw, pf.sinw, pf.cos2w, pf.sin2w, prepBells[i]);
-            }
-
-            // NaN/inf ガード
-            if (std::isnan(totalMag) || std::isinf(totalMag)) totalMag = 1.0;
-            totalMag = std::max(totalMag, 1e-10);
-
-            double magDb = 20.0 * std::log10(totalMag);
-            float y = gainToY(static_cast<float>(magDb));
-            y = std::clamp(y, -100.0f, static_cast<float>(h) + 100.0f);
-
-            if (!started)
-            {
-                cachedResponsePath.startNewSubPath(static_cast<float>(x), y);
-                started = true;
-            }
-            else
-            {
-                cachedResponsePath.lineTo(static_cast<float>(x), y);
             }
         }
 
@@ -571,12 +420,6 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
             float targetX = proportion * static_cast<float>(w);
             float f = xToLogF(targetX);
             
-            double w_rad = 2.0 * std::numbers::pi * f / currentSampleRate;
-            double cw = std::cos(w_rad);
-            double sw = std::sin(w_rad);
-            double cw2 = std::cos(2.0 * w_rad);
-            double sw2 = std::sin(2.0 * w_rad);
-            
             double w_sum = 0.0;
             double r_sum = 0.0, g_sum = 0.0, b_sum = 0.0;
             
@@ -584,38 +427,43 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
             {
                 if (bellParams[bIdx].active && std::abs(bellParams[bIdx].gain) > 0.01)
                 {
-                    double A = std::pow(10.0, bellParams[bIdx].gain / 40.0);
-                    double w0 = 2.0 * std::numbers::pi * bellParams[bIdx].freq / currentSampleRate;
-                    double alpha = std::sin(w0) / (2.0 * bellParams[bIdx].q);
+                    double omega = std::tan(std::numbers::pi * f / currentSampleRate);
+                    double g_val = std::tan(std::numbers::pi * bellParams[bIdx].freq / currentSampleRate);
                     
-                    double a0 = 1.0 + alpha / A;
-                    double b0 = (1.0 + alpha * A) / a0;
-                    double b1 = (-2.0 * std::cos(w0)) / a0;
-                    double b2 = (1.0 - alpha * A) / a0;
-                    double a1 = (-2.0 * std::cos(w0)) / a0;
-                    double a2 = (1.0 - alpha / A) / a0;
-                    
-                    double numRe = b0 + b1 * cw + b2 * cw2;
-                    double numIm = -b1 * sw - b2 * sw2;
-                    double numMagSq = numRe * numRe + numIm * numIm;
-                    
-                    double denRe = 1.0 + a1 * cw + a2 * cw2;
-                    double denIm = -a1 * sw - a2 * sw2;
-                    double denMagSq = denRe * denRe + denIm * denIm;
-                    
-                    double bellMag = 1.0;
-                    if (denMagSq > 0.0) {
-                        bellMag = std::sqrt(numMagSq / denMagSq);
-                    }
-                    
-                    double attenuationDb = -20.0 * std::log10(std::max(bellMag, 1e-5));
-                    double diffDb = std::abs(attenuationDb);
-                    if (diffDb > 0.1)
+                    if (g_val > 0.0)
                     {
-                        w_sum += diffDb;
-                        r_sum += diffDb * bellColors[bIdx].getRed();
-                        g_sum += diffDb * bellColors[bIdx].getGreen();
-                        b_sum += diffDb * bellColors[bIdx].getBlue();
+                        double R = omega / g_val;
+                        double R2 = R * R;
+                        double q_safe = std::max(bellParams[bIdx].q, 0.05);
+                        double V = std::pow(10.0, bellParams[bIdx].gain / 20.0);
+                        
+                        double r_over_q = R / q_safe;
+                        double termNum = r_over_q * V;
+                        double termDen = r_over_q / V;
+                        
+                        double numSq = (1.0 - R2) * (1.0 - R2) + termNum * termNum;
+                        double denSq = (1.0 - R2) * (1.0 - R2) + termDen * termDen;
+                        
+                        if (bellParams[bIdx].gain < 0.0)
+                        {
+                            std::swap(numSq, denSq);
+                        }
+                        
+                        double bellMag = 1.0;
+                        if (denSq > 0.0)
+                        {
+                            bellMag = std::sqrt(numSq / denSq);
+                        }
+                        
+                        double attenuationDb = -20.0 * std::log10(std::max(bellMag, 1e-5));
+                        double diffDb = std::abs(attenuationDb);
+                        if (diffDb > 0.1)
+                        {
+                            w_sum += diffDb;
+                            r_sum += diffDb * bellColors[bIdx].getRed();
+                            g_sum += diffDb * bellColors[bIdx].getGreen();
+                            b_sum += diffDb * bellColors[bIdx].getBlue();
+                        }
                     }
                 }
             }
