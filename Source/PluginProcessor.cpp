@@ -206,15 +206,15 @@ void HighPrecisionEQAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
     float slopeVal = apvts.getRawParameterValue("slopeDbOct")->load();
     float gainDb = apvts.getRawParameterValue("gainDb")->load();
 
-    int order = static_cast<int>(std::round(slopeVal / 12.0f));
-    order = std::clamp(order, 1, 8);
+    int order = static_cast<int>(std::round(slopeVal / 6.0f));
+    order = std::clamp(order, 1, 16);
 
     bool lowcut_enable = apvts.getRawParameterValue("lowcut_enable")->load() > 0.5f;
 
     float hcFreq = apvts.getRawParameterValue("highcut_freq")->load();
     float hcSlope = apvts.getRawParameterValue("highcut_slope")->load();
-    int hcOrder = static_cast<int>(std::round(hcSlope / 12.0f));
-    hcOrder = std::clamp(hcOrder, 1, 8);
+    int hcOrder = static_cast<int>(std::round(hcSlope / 6.0f));
+    hcOrder = std::clamp(hcOrder, 1, 16);
     bool hcEnable = apvts.getRawParameterValue("highcut_enable")->load() > 0.5f;
     float hcGainDb = apvts.getRawParameterValue("highcut_gainDb")->load();
 

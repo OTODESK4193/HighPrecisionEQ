@@ -36,9 +36,9 @@ void MinimumPhaseEQ::updateParameters(double lowCutFreq, int lowCutOrder, bool l
     currentLowCutGainDb = lowCutGainDb;
     currentHighCutGainDb = highCutGainDb;
 
-    // mix の計算 (0.0 〜 1.0)
-    lowCutMix = std::clamp(std::abs(lowCutGainDb) / 10.0, 0.0, 1.0);
-    highCutMix = std::clamp(std::abs(highCutGainDb) / 10.0, 0.0, 1.0);
+    // フィルターのDry/Wetミックスは激しいコムフィルタリング（位相干渉）を引き起こすため廃止し、常に100%適用とする
+    lowCutMix = 1.0;
+    highCutMix = 1.0;
 
     for (size_t i = 0; i < 4; ++i)
     {
@@ -54,7 +54,7 @@ void MinimumPhaseEQ::updateParameters(double lowCutFreq, int lowCutOrder, bool l
     // A. LowCut (HighPass)
     if (lowCutEnable && lowCutOrder > 0)
     {
-        int order = std::clamp(lowCutOrder, 1, 8);
+        int order = std::clamp(lowCutOrder, 1, 16);
         int numBiquads = order / 2;
         bool hasFirstOrder = (order % 2) != 0;
 
@@ -95,7 +95,7 @@ void MinimumPhaseEQ::updateParameters(double lowCutFreq, int lowCutOrder, bool l
     // B. HighCut (LowPass)
     if (highCutEnable && highCutOrder > 0)
     {
-        int order = std::clamp(highCutOrder, 1, 8);
+        int order = std::clamp(highCutOrder, 1, 16);
         int numBiquads = order / 2;
         bool hasFirstOrder = (order % 2) != 0;
 

@@ -129,7 +129,9 @@ public:
             if (!active || type == Type::Bypass) return 1.0;
 
             // アナログプリワーピング周波数 Ω = std::tan(π * f / sr)
-            double omega = std::tan(std::numbers::pi * f / sr);
+            // ナイキスト周波数（sr/2）以上での描画の折り返し（エイリアス）を防ぐためクランプする
+            double f_eval = std::clamp(f, 1.0, sr * 0.4999);
+            double omega = std::tan(std::numbers::pi * f_eval / sr);
             
             // フィルターのカットオフに対するプリワーピング周波数 g_val = std::tan(π * fc / sr)
             double cutoff_safe = std::clamp(freq, 1.0, sr * 0.49);
@@ -220,7 +222,7 @@ private:
     bool currentLowCutEnable = true;
     bool currentHighCutEnable = false;
 
-    static constexpr size_t MaxSections = 12;
+    static constexpr size_t MaxSections = 24;
     std::vector<FilterSection> activeSections;
     std::vector<FilterSection> pendingSections;
     std::vector<BellParam> targetBells;
