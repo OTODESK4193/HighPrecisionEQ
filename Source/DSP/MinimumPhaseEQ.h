@@ -88,7 +88,6 @@ public:
             {
                 double G0 = 1.0;
                 double G = std::pow(10.0, gain / 20.0);
-                double GB = std::sqrt(G0 * G);
                 
                 if (std::abs(G - G0) < 1e-5)
                 {
@@ -139,22 +138,22 @@ public:
             if (g_val <= 0.0) return 1.0;
             
             double R = omega / g_val;
-            double R2 = R * R;
+            double R_sq = R * R;
 
             if (type == Type::HighPass)
             {
                 if (isFirstOrder)
                 {
                     // 1次HPF: |H| = R / sqrt(R^2 + 1)
-                    return R / std::sqrt(R2 + 1.0);
+                    return R / std::sqrt(R_sq + 1.0);
                 }
                 else
                 {
                     // 2次HPF: |H| = R^2 / sqrt((1 - R^2)^2 + (R/Q)^2)
                     double q_safe = std::max(q, 0.1);
-                    double denomSq = (1.0 - R2) * (1.0 - R2) + (R / q_safe) * (R / q_safe);
+                    double denomSq = (1.0 - R_sq) * (1.0 - R_sq) + (R / q_safe) * (R / q_safe);
                     if (denomSq <= 0.0) return 1.0;
-                    return R2 / std::sqrt(denomSq);
+                    return R_sq / std::sqrt(denomSq);
                 }
             }
             else if (type == Type::LowPass)
@@ -162,13 +161,13 @@ public:
                 if (isFirstOrder)
                 {
                     // 1次LPF: |H| = 1 / sqrt(R^2 + 1)
-                    return 1.0 / std::sqrt(R2 + 1.0);
+                    return 1.0 / std::sqrt(R_sq + 1.0);
                 }
                 else
                 {
                     // 2次LPF: |H| = 1 / sqrt((1 - R^2)^2 + (R/Q)^2)
                     double q_safe = std::max(q, 0.1);
-                    double denomSq = (1.0 - R2) * (1.0 - R2) + (R / q_safe) * (R / q_safe);
+                    double denomSq = (1.0 - R_sq) * (1.0 - R_sq) + (R / q_safe) * (R / q_safe);
                     if (denomSq <= 0.0) return 1.0;
                     return 1.0 / std::sqrt(denomSq);
                 }

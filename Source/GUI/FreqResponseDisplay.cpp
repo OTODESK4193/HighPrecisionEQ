@@ -547,9 +547,10 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
     // 6. 選択帯域の強調ハイライト（Hover含む）
     if (activeDragBand != -1 || isHovering)
     {
+        juce::Colour bellColors[4] = { pal.bell1, pal.bell2, pal.bell3, pal.bell4 };
         juce::Colour c = (activeDragBand == 0) ? pal.lowcut :
-                         (activeDragBand == 1) ? pal.bell1 :
-                         (activeDragBand >= 2 && activeDragBand <= 5) ? pal.bell1 : // just use pal.bell1 as fallback
+                         (activeDragBand == 1) ? pal.highcut :
+                         (activeDragBand >= 2 && activeDragBand <= 5) ? bellColors[activeDragBand - 2] :
                          juce::Colours::white;
                          
         if (isHovering && activeDragBand == -1) c = juce::Colours::white.withAlpha(0.7f);
@@ -607,9 +608,9 @@ void FreqResponseDisplay::drawEQPoints(juce::Graphics& g)
         float x = logFToX(static_cast<float>(currentHighCutFreq));
         float y = gainToY(static_cast<float>(currentHighCutGainDb));
 
-        g.setColour(selectedBandIdx == 1 ? juce::Colours::white : pal.bell1);
+        g.setColour(selectedBandIdx == 1 ? juce::Colours::white : pal.highcut);
         g.fillEllipse(x - 6.0f, y - 6.0f, 12.0f, 12.0f);
-        g.setColour(pal.bell1.withAlpha(0.4f));
+        g.setColour(pal.highcut.withAlpha(0.4f));
         g.drawEllipse(x - 9.0f, y - 9.0f, 18.0f, 18.0f, 1.5f);
 
         g.setColour(pal.text.withAlpha(0.8f));
@@ -658,6 +659,10 @@ void FreqResponseDisplay::mouseDown(const juce::MouseEvent& e)
         {
             activeDragBand = 0;
             if (editor != nullptr) editor->selectBand(HighPrecisionEQAudioProcessorEditor::SelectedBand::LowCut);
+            if (e.mods.isShiftDown() && processor != nullptr)
+            {
+                processor->setSoloMode(true, static_cast<float>(currentCutoffHz), 2.0f);
+            }
             repaint();
             return;
         }
@@ -668,10 +673,14 @@ void FreqResponseDisplay::mouseDown(const juce::MouseEvent& e)
     {
         float x = logFToX(static_cast<float>(currentHighCutFreq));
         float y = gainToY(static_cast<float>(currentHighCutGainDb));
-        if (std::hypot(mouseX - x, mouseY - y) < grabRadius)
+        if (std::hypot(mx - x, my - y) < grabRadius)
         {
             activeDragBand = 1;
             if (editor != nullptr) editor->selectBand(HighPrecisionEQAudioProcessorEditor::SelectedBand::HighCut);
+            if (e.mods.isShiftDown() && processor != nullptr)
+            {
+                processor->setSoloMode(true, static_cast<float>(currentHighCutFreq), 2.0f);
+            }
             repaint();
             return;
         }
@@ -684,10 +693,14 @@ void FreqResponseDisplay::mouseDown(const juce::MouseEvent& e)
         {
             float x = logFToX(static_cast<float>(bellParams[i].freq));
             float y = gainToY(static_cast<float>(bellParams[i].gain));
-            if (std::hypot(mouseX - x, mouseY - y) < grabRadius)
+            if (std::hypot(mx - x, my - y) < grabRadius)
             {
                 activeDragBand = i + 2;
                 if (editor != nullptr) editor->selectBand(static_cast<HighPrecisionEQAudioProcessorEditor::SelectedBand>(i + 2));
+                if (e.mods.isShiftDown() && processor != nullptr)
+                {
+                    processor->setSoloMode(true, static_cast<float>(bellParams[i].freq), std::max(2.0f, static_cast<float>(bellParams[i].q)));
+                }
                 repaint();
                 return;
             }
@@ -717,10 +730,11 @@ void FreqResponseDisplay::mouseDrag(const juce::MouseEvent& e)
     if (processor != nullptr && activeDragBand != -1)
     {
         auto& apvts = processor->apvts;
+        float targetFreq = dragFreq;
 
         if (activeDragBand == 0) // LowCut
         {
-            float targetFreq = std::clamp(dragFreq, 1.0f, 500.0f);
+            targetFreq = std::clamp(dragFreq, 1.0f, 500.0f);
             float targetGain = std::clamp(dragGain, -10.0f, 0.0f);
 
             auto rangeF = apvts.getParameterRange("cutoffHz");
@@ -731,7 +745,7 @@ void FreqResponseDisplay::mouseDrag(const juce::MouseEvent& e)
         }
         else if (activeDragBand == 1) // HighCut
         {
-            float targetFreq = std::clamp(dragFreq, 20.0f, 25000.0f);
+            targetFreq = std::clamp(dragFreq, 20.0f, 25000.0f);
 
             auto rangeF = apvts.getParameterRange("highcut_freq");
             apvts.getParameter("highcut_freq")->setValueNotifyingHost(rangeF.convertTo0to1(targetFreq));
@@ -741,7 +755,7 @@ void FreqResponseDisplay::mouseDrag(const juce::MouseEvent& e)
             int idx = activeDragBand - 1; // Bell1..4 (1-indexed suffix: 1..4)
             juce::String idSuffix = juce::String(idx);
             
-            float targetFreq = std::clamp(dragFreq, 1.0f, 25000.0f);
+            targetFreq = std::clamp(dragFreq, 1.0f, 25000.0f);
             float targetGain = std::clamp(dragGain, -18.0f, 18.0f);
 
             juce::String freqID = "bell_freq_" + idSuffix;
@@ -752,6 +766,21 @@ void FreqResponseDisplay::mouseDrag(const juce::MouseEvent& e)
 
             auto rangeG = apvts.getParameterRange(gainID);
             apvts.getParameter(gainID)->setValueNotifyingHost(rangeG.convertTo0to1(targetGain));
+        }
+
+        // Shiftドラッグ中のSolo更新
+        if (e.mods.isShiftDown())
+        {
+            float soloQ = 2.0f;
+            if (activeDragBand >= 2 && activeDragBand <= 5)
+            {
+                soloQ = std::max(2.0f, static_cast<float>(bellParams[activeDragBand - 2].q));
+            }
+            processor->setSoloMode(true, targetFreq, soloQ);
+        }
+        else
+        {
+            processor->setSoloMode(false, 0.0f, 0.0f);
         }
     }
     else
@@ -796,18 +825,87 @@ void FreqResponseDisplay::mouseDrag(const juce::MouseEvent& e)
 void FreqResponseDisplay::mouseUp(const juce::MouseEvent&)
 {
     activeDragBand = -1;
+    if (processor != nullptr)
+    {
+        processor->setSoloMode(false, 0.0f, 0.0f);
+    }
 }
 
-void FreqResponseDisplay::mouseDoubleClick(const juce::MouseEvent&)
+void FreqResponseDisplay::mouseDoubleClick(const juce::MouseEvent& e)
 {
-    // ダブルクリックでズーム初期化
-    currentMinF = 1.0f;
-    currentMaxF = 25000.0f;
-    currentMinDb = -12.0f;
-    currentMaxDb = 12.0f;
-    analyzerGainOffsetDb = 0.0f;
-    pathNeedsRecalculation = true;
-    repaint();
+    if (processor == nullptr) return;
+    auto& apvts = processor->apvts;
+
+    float mx = static_cast<float>(e.x);
+    float my = static_cast<float>(e.y);
+    const float grabRadius = 15.0f;
+    int targetBand = -1;
+
+    // 1. LowCut
+    if (currentLowcutEnable)
+    {
+        float x = logFToX(static_cast<float>(currentCutoffHz));
+        float y = gainToY(static_cast<float>(currentGainDb));
+        if (std::hypot(mx - x, my - y) < grabRadius)
+        {
+            targetBand = 0;
+        }
+    }
+
+    // 2. HighCut
+    if (targetBand == -1 && currentHighCutEnable)
+    {
+        float x = logFToX(static_cast<float>(currentHighCutFreq));
+        float y = gainToY(static_cast<float>(currentHighCutGainDb));
+        if (std::hypot(mx - x, my - y) < grabRadius)
+        {
+            targetBand = 1;
+        }
+    }
+
+    // 3. Bells
+    if (targetBand == -1)
+    {
+        for (int i = 0; i < 4; ++i)
+        {
+            if (bellParams[i].active)
+            {
+                float x = logFToX(static_cast<float>(bellParams[i].freq));
+                float y = gainToY(static_cast<float>(bellParams[i].gain));
+                if (std::hypot(mx - x, my - y) < grabRadius)
+                {
+                    targetBand = i + 2;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (targetBand != -1)
+    {
+        juce::String paramID;
+        if (targetBand == 0) paramID = "lowcut_enable";
+        else if (targetBand == 1) paramID = "highcut_enable";
+        else paramID = "bell_enable_" + juce::String(targetBand - 1);
+
+        auto* param = apvts.getParameter(paramID);
+        if (param != nullptr)
+        {
+            bool currentVal = param->getValue() > 0.5f;
+            param->setValueNotifyingHost(currentVal ? 0.0f : 1.0f);
+        }
+    }
+    else
+    {
+        // ダブルクリックでズーム初期化
+        currentMinF = 1.0f;
+        currentMaxF = 25000.0f;
+        currentMinDb = -12.0f;
+        currentMaxDb = 12.0f;
+        analyzerGainOffsetDb = 0.0f;
+        pathNeedsRecalculation = true;
+        repaint();
+    }
 }
 
 void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel)

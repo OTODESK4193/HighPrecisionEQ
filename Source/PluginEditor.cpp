@@ -351,7 +351,7 @@ void HighPrecisionEQAudioProcessorEditor::updateComponentColors()
     
     juce::Colour activeColor = pal.lowcut;
     switch (currentBand) {
-        case SelectedBand::HighCut: activeColor = pal.bell1; break; // HighCut用にシアンや青系を流用
+        case SelectedBand::HighCut: activeColor = pal.highcut; break;
         case SelectedBand::Bell1: activeColor = pal.bell1; break;
         case SelectedBand::Bell2: activeColor = pal.bell2; break;
         case SelectedBand::Bell3: activeColor = pal.bell3; break;
@@ -365,7 +365,7 @@ void HighPrecisionEQAudioProcessorEditor::updateComponentColors()
     slopeSlider.setColour(juce::Slider::rotarySliderFillColourId, activeColor);
     
     // バンドボタン色の割り当て
-    juce::Colour bandColors[6] = { pal.lowcut, pal.bell1, pal.bell1, pal.bell2, pal.bell3, pal.bell4 };
+    juce::Colour bandColors[6] = { pal.lowcut, pal.highcut, pal.bell1, pal.bell2, pal.bell3, pal.bell4 };
     for (int i = 0; i < 6; ++i)
     {
         bandButtons[i].setColour(juce::TextButton::buttonOnColourId, bandColors[i].withAlpha(0.6f));

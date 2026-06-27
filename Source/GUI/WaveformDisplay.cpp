@@ -178,7 +178,7 @@ void WaveformDisplay::drawWaveform(juce::Graphics& g, const std::vector<float>& 
     }
 }
 
-void WaveformDisplay::mouseDown(const juce::MouseEvent& event)
+void WaveformDisplay::mouseDown(const juce::MouseEvent& /*event*/)
 {
     dragStartPan = panOffset;
 }
@@ -191,7 +191,7 @@ void WaveformDisplay::mouseDrag(const juce::MouseEvent& event)
     repaint();
 }
 
-void WaveformDisplay::mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel)
+void WaveformDisplay::mouseWheelMove(const juce::MouseEvent& /*event*/, const juce::MouseWheelDetails& wheel)
 {
     float zFactor = 1.0f + wheel.deltaY * 2.0f;
     zoomLevel = std::clamp(zoomLevel * zFactor, 1.0f, 100.0f);
