@@ -162,10 +162,7 @@ public:
                 double numSq = (1.0 - R2) * (1.0 - R2) + termNum * termNum;
                 double denSq = (1.0 - R2) * (1.0 - R2) + termDen * termDen;
                 
-                if (gain < 0.0)
-                {
-                    std::swap(numSq, denSq);
-                }
+
                 
                 if (denSq <= 0.0) return 1.0;
                 return std::sqrt(numSq / denSq);

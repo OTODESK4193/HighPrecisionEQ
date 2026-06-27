@@ -77,5 +77,12 @@ private:
     double attackCoef = 0.0;
     double releaseCoef = 0.0;
 
+    int decimationRatio = 64;
+    double lowSampleRate = 44100.0 / 64.0;
+    double decimationAccumulator = 0.0;
+    int decimationCounter = 0;
+    double attackCoefLow = 0.0;
+    double releaseCoefLow = 0.0;
+
     std::atomic<uint64_t> updateCount{ 0 };
 };

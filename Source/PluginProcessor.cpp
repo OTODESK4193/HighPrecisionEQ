@@ -140,8 +140,8 @@ void HighPrecisionEQAudioProcessor::prepareToPlay(double sampleRate, int samples
     
     {
         double targetSr = sampleRate;
-        size_t preTrigger = static_cast<size_t>(0.010 * targetSr);
-        size_t postTrigger = static_cast<size_t>(0.040 * targetSr);
+        size_t preTrigger = static_cast<size_t>(0.100 * targetSr);  // 100ms
+        size_t postTrigger = static_cast<size_t>(2.000 * targetSr); // 2.0s
         size_t totalSamples = preTrigger + postTrigger;
         for (size_t i = 0; i <= snapshotQueue.capacity(); ++i)
         {

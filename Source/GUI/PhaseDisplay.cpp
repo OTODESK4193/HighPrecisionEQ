@@ -233,21 +233,37 @@ void PhaseDisplay::drawAnalyzerSpectrum(juce::Graphics& g, juce::Rectangle<int> 
     std::vector<float> energies = analyzer->getEnergies();
     
     const int numBands = AnalyzerDSP::NumBands;
-    double fmin = 10.0;
-    double fmax = std::min(24000.0, currentSampleRate * 0.49);
-    double logFmin = std::log(fmin);
-    double logRatio = std::log(fmax / fmin);
 
-    // 480バンドの離散周波数値から対数線形補間するラムダ
+    // ハイブリッド補間 (1-200Hzは線形、200Hz-25kHzは対数)
     auto getInterpolatedDb = [&](double f) -> float
     {
-        if (f <= fmin) return energies[0];
-        if (f >= fmax) return energies[numBands - 1];
+        double idx = 0.0;
+        if (f <= 1.0)
+        {
+            idx = 0.0;
+        }
+        else if (f < 200.0)
+        {
+            // 1Hz〜200Hz (線形等間隔, バンド0-199)
+            idx = f - 1.0;
+        }
+        else
+        {
+            // 200Hz〜25000Hz (対数等間隔, バンド200-479)
+            double logF = std::log(f);
+            double log200 = std::log(200.0);
+            double log25000 = std::log(std::min(25000.0, currentSampleRate * 0.45));
+            
+            if (log25000 <= log200) log25000 = log200 + 1.0;
+            
+            double ratio = (logF - log200) / (log25000 - log200);
+            idx = 199.0 + ratio * 280.0;
+        }
         
-        double idx = (std::log(f) - logFmin) / logRatio * (numBands - 1);
-        int idx0 = std::clamp(static_cast<int>(std::floor(idx)), 0, numBands - 1);
+        double clampedIdx = std::clamp(idx, 0.0, static_cast<double>(numBands - 1));
+        int idx0 = static_cast<int>(std::floor(clampedIdx));
         int idx1 = std::clamp(idx0 + 1, 0, numBands - 1);
-        double frac = idx - idx0;
+        double frac = clampedIdx - idx0;
         
         return energies[static_cast<size_t>(idx0)] * (1.0f - static_cast<float>(frac)) 
              + energies[static_cast<size_t>(idx1)] * static_cast<float>(frac);

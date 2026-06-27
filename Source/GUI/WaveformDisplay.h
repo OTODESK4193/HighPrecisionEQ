@@ -33,9 +33,9 @@ private:
     // For drawing optimization
     juce::Image cachedImage;
 
-    float zoomLevel = 1.0f;
-    float panOffset = 0.0f;
-    float dragStartPan = 0.0f;
+    float zoomLevel = 8.0f;
+    float panOffset = 0.03f;
+    float dragStartPan = 0.03f;
 
     // Draw a single waveform using drawPolyline (no juce::Path allocations)
     void drawWaveform(juce::Graphics& g, const std::vector<float>& data, juce::Colour color, juce::Rectangle<int> bounds, float scale);

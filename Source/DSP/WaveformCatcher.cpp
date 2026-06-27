@@ -10,9 +10,9 @@ void WaveformCatcher::prepareToPlay(double sr, int samplesPerBlock)
     (void)samplesPerBlock;
     sampleRate = sr;
     
-    // 10ms pre-trigger, 40ms post-trigger = 50ms total
-    preTriggerSamples = static_cast<size_t>(0.010 * sampleRate);
-    postTriggerSamples = static_cast<size_t>(0.040 * sampleRate);
+    // 100ms pre-trigger, 2000ms post-trigger = 2100ms total
+    preTriggerSamples = static_cast<size_t>(0.100 * sampleRate);
+    postTriggerSamples = static_cast<size_t>(2.000 * sampleRate);
     totalSnapshotSamples = preTriggerSamples + postTriggerSamples;
     
     // Calculate ring buffer size (must be power of two, larger than total snapshot)

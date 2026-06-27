@@ -24,19 +24,40 @@ void AnalyzerDSP::prepare(double newSampleRate)
 {
     sampleRate = newSampleRate;
     
-    double fmin = 1.0;
-    double fmax = std::min(25000.0, sampleRate * 0.49);
-    double Q = 24.0; // ユーザー指定の Q = 24.0
+    // サンプルレートに応じてデシメーション比を動的に決定
+    if (sampleRate < 60000.0)      decimationRatio = 32;
+    else if (sampleRate < 120000.0) decimationRatio = 64;
+    else                           decimationRatio = 128;
     
-    for (int i = 0; i < NumBands; ++i)
+    lowSampleRate = sampleRate / decimationRatio;
+    
+    decimationAccumulator = 0.0;
+    decimationCounter = 0;
+    
+    // 1. 低域フィルタバンク (1-200Hz, 1Hzステップ) -> デシメーション信号で処理
+    for (int i = 0; i < 200; ++i)
     {
-        double fc = fmin * std::pow(fmax / fmin, static_cast<double>(i) / (NumBands - 1));
+        double fc = 1.0 + i;
+        // 低域ではQ値は周波数に比例させる（下限2.0、上限24.0）
+        double Q = std::clamp(fc / 8.0, 2.0, 24.0);
         
-        // ナイキスト限界近くの安定性ガード
-        double maxFc = sampleRate * 0.45;
-        if (fc > maxFc) fc = maxFc;
+        bands[static_cast<size_t>(i)].updateCoeffs(fc, Q, lowSampleRate);
+        bands[static_cast<size_t>(i)].ic1eq = 0.0;
+        bands[static_cast<size_t>(i)].ic2eq = 0.0;
+        bands[static_cast<size_t>(i)].env = 0.0;
+    }
+
+    // 2. 中高域フィルタバンク (200Hz-25kHz) -> フルレート信号で処理
+    double fmin_high = 200.0;
+    double fmax_high = std::min(25000.0, sampleRate * 0.45);
+    double Q_high = 24.0;
+    
+    for (int i = 200; i < NumBands; ++i)
+    {
+        double proportion = static_cast<double>(i - 200) / (NumBands - 1 - 200);
+        double fc = fmin_high * std::pow(fmax_high / fmin_high, proportion);
         
-        bands[static_cast<size_t>(i)].updateCoeffs(fc, Q, sampleRate);
+        bands[static_cast<size_t>(i)].updateCoeffs(fc, Q_high, sampleRate);
         bands[static_cast<size_t>(i)].ic1eq = 0.0;
         bands[static_cast<size_t>(i)].ic2eq = 0.0;
         bands[static_cast<size_t>(i)].env = 0.0;
@@ -45,6 +66,9 @@ void AnalyzerDSP::prepare(double newSampleRate)
     // エンベロープフォロワー時定数 (アタック10ms, リリース150ms)
     attackCoef = std::exp(-1.0 / (0.010 * sampleRate));
     releaseCoef = std::exp(-1.0 / (0.150 * sampleRate));
+    
+    attackCoefLow = std::exp(-1.0 / (0.010 * lowSampleRate));
+    releaseCoefLow = std::exp(-1.0 / (0.150 * lowSampleRate));
 
     writePos.store(0, std::memory_order_relaxed);
     readPos = 0;
@@ -104,7 +128,8 @@ void AnalyzerDSP::processInternal(const float* data, int numSamples)
     {
         double x = static_cast<double>(data[i]);
         
-        for (int b = 0; b < NumBands; ++b)
+        // 1. 中高域フィルタ (200Hz-25kHz) の処理 (フルサンプルレート)
+        for (int b = 200; b < NumBands; ++b)
         {
             double bp = bands[static_cast<size_t>(b)].process(x);
             double absVal = std::abs(bp);
@@ -116,17 +141,46 @@ void AnalyzerDSP::processInternal(const float* data, int numSamples)
                 currentEnv = releaseCoef * currentEnv + (1.0 - releaseCoef) * absVal;
                 
             bands[static_cast<size_t>(b)].env = currentEnv;
+        }
+
+        // 2. 移動平均デシメーションの処理
+        decimationAccumulator += x;
+        decimationCounter++;
+        
+        if (decimationCounter >= decimationRatio)
+        {
+            double x_low = decimationAccumulator / decimationRatio;
+            decimationAccumulator = 0.0;
+            decimationCounter = 0;
             
-            // CPU節約のため時々アトミックに書き込む
-            if ((i & 255) == 0)
+            // 3. 低域フィルタ (1-200Hz) の処理 (ダウンサンプルレート)
+            for (int b = 0; b < 200; ++b)
             {
-                float db = static_cast<float>(20.0 * std::log10(std::max(1e-9, currentEnv)));
+                double bp = bands[static_cast<size_t>(b)].process(x_low);
+                double absVal = std::abs(bp);
+                
+                double currentEnv = bands[static_cast<size_t>(b)].env;
+                if (absVal > currentEnv)
+                    currentEnv = attackCoefLow * currentEnv + (1.0 - attackCoefLow) * absVal;
+                else
+                    currentEnv = releaseCoefLow * currentEnv + (1.0 - releaseCoefLow) * absVal;
+                    
+                bands[static_cast<size_t>(b)].env = currentEnv;
+            }
+        }
+        
+        // アトミック更新 (CPU負荷軽減のため定期的に反映)
+        if ((i & 255) == 0)
+        {
+            for (int b = 0; b < NumBands; ++b)
+            {
+                float db = static_cast<float>(20.0 * std::log10(std::max(1e-9, bands[static_cast<size_t>(b)].env)));
                 peaks[static_cast<size_t>(b)].store(db, std::memory_order_relaxed);
             }
         }
     }
     
-    // このチャンクの最終値をアトミックに反映
+    // 最終ピーク値の更新
     for (int b = 0; b < NumBands; ++b)
     {
         float db = static_cast<float>(20.0 * std::log10(std::max(1e-9, bands[static_cast<size_t>(b)].env)));
