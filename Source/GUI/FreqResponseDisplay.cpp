@@ -559,7 +559,7 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
     }
     
     // 7. Hover時の周波数/Keyテキスト描画
-    if (isHovering && hoverText.isNotEmpty())
+    if (mouseX >= 0 && mouseY >= 0 && hoverText.isNotEmpty())
     {
         g.setColour(juce::Colour(0xff2a2a3e).withAlpha(0.8f));
         int textW = 120;
@@ -962,6 +962,8 @@ void FreqResponseDisplay::mouseExit(const juce::MouseEvent&)
 {
     isHovering = false;
     hoverText.clear();
+    mouseX = -1;
+    mouseY = -1;
     repaint();
 }
 
@@ -991,8 +993,9 @@ void FreqResponseDisplay::mouseMove(const juce::MouseEvent& e)
     }
     else
     {
-        isHovering = false;
         hoverText.clear();
+        mouseX = -1;
+        mouseY = -1;
     }
     
     repaint();

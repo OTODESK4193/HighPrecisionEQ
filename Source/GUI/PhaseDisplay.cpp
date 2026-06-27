@@ -398,7 +398,8 @@ void PhaseDisplay::drawPhaseCurve(juce::Graphics& g, juce::Rectangle<int> bounds
                 }
 
                 // HPF 複素偏角
-                double w_ang = 2.0 * std::numbers::pi * f / currentSampleRate;
+                double f_eval = std::clamp(static_cast<double>(f), 1.0, currentSampleRate * 0.4999);
+                double w_ang = 2.0 * std::numbers::pi * f_eval / currentSampleRate;
                 double cosw = std::cos(w_ang);
                 double alpha = std::sin(2.0 * std::numbers::pi * currentCutoff / currentSampleRate) / (2.0 * qVal);
                 double cosw0 = std::cos(2.0 * std::numbers::pi * currentCutoff / currentSampleRate);
@@ -439,7 +440,8 @@ void PhaseDisplay::drawPhaseCurve(juce::Graphics& g, juce::Rectangle<int> bounds
                 }
 
                 // LPF 複素偏角
-                double w_ang = 2.0 * std::numbers::pi * f / currentSampleRate;
+                double f_eval = std::clamp(static_cast<double>(f), 1.0, currentSampleRate * 0.4999);
+                double w_ang = 2.0 * std::numbers::pi * f_eval / currentSampleRate;
                 double cosw = std::cos(w_ang);
                 double alpha = std::sin(2.0 * std::numbers::pi * currentHighCutFreq / currentSampleRate) / (2.0 * qVal);
                 double cosw0 = std::cos(2.0 * std::numbers::pi * currentHighCutFreq / currentSampleRate);
@@ -482,7 +484,8 @@ void PhaseDisplay::drawPhaseCurve(juce::Graphics& g, juce::Rectangle<int> bounds
                 double a1 = -2.0 * std::cos(w0) / a0;
                 double a2 = (1.0 - alpha / A) / a0;
 
-                double w_ang = 2.0 * std::numbers::pi * f / currentSampleRate;
+                double f_eval = std::clamp(static_cast<double>(f), 1.0, currentSampleRate * 0.4999);
+                double w_ang = 2.0 * std::numbers::pi * f_eval / currentSampleRate;
                 double cosw = std::cos(w_ang);
                 
                 double numRe = b0 + b1 * cosw + b2 * std::cos(2.0 * w_ang);

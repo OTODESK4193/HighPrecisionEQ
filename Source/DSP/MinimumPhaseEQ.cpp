@@ -462,6 +462,8 @@ double MinimumPhaseEQ::getBellCascadeMagnitude(double freq, const std::array<Bel
             sec.gain = b.gain;
             sec.q = b.q;
             sec.active = true;
+            sec.isFirstOrder = false;
+            sec.updateCoefficients(currentSampleRate);
             mag *= sec.getMagnitudeForFrequency(freq, currentSampleRate);
         }
     }

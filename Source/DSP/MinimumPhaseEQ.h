@@ -101,15 +101,14 @@ public:
                     double W = std::tan(wc / 2.0);
                     
                     double delta_w = wc / q_safe;
-                    
                     double wn = std::numbers::pi / wc;
-                    double G1_sq = (std::pow(1.0 - wn*wn, 2.0) + std::pow(wn/q_safe, 2.0) * G*G) / 
-                                   (std::pow(1.0 - wn*wn, 2.0) + std::pow(wn/q_safe, 2.0));
                     
-                    double c = (W*W * (G*G - G1_sq)) / (G1_sq - G0*G0);
-                    double D_val = std::sqrt(std::abs(c));
+                    // Numerically stable Orfanidis coefficients (canceling the denominator avoids NaN)
+                    double c_sqrt = W * std::abs(1.0 - wn * wn) / (wn / q_safe);
+                    double c = c_sqrt * c_sqrt;
+                    double D_val = c_sqrt;
                     
-                    double u = std::sqrt(std::abs((G*G - GB*GB) / (GB*GB - G0*G0)));
+                    double u = std::sqrt(G);
                     double B = u * (W*W + c) * delta_w / (W * D_val);
                     
                     double a0_bq = 1.0 + B + c;
@@ -177,7 +176,7 @@ public:
             else if (type == Type::Bell)
             {
                 // Biquad magnitude response: |H(e^jw)| = |b0 + b1 e^-jw + b2 e^-2jw| / |1 + a1 e^-jw + a2 e^-2jw|
-                double w = 2.0 * std::numbers::pi * f / sr;
+                double w = 2.0 * std::numbers::pi * f_eval / sr;
                 
                 double cos_w = std::cos(w);
                 double cos_2w = std::cos(2.0 * w);
@@ -191,7 +190,11 @@ public:
                                 2.0 * 1.0*a2 * cos_2w;
                                 
                 if (den_sq <= 0.0) return 1.0;
-                return std::sqrt(num_sq / den_sq);
+                
+                double val = num_sq / den_sq;
+                if (val < 0.0) val = 0.0;
+                
+                return std::sqrt(val);
             }
 
             return 1.0;
