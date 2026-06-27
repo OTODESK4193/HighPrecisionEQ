@@ -34,10 +34,17 @@ public:
 
         // TPT 係数
         double g = 0.0;
-        double D = 0.0;
         double R2 = 0.0;
-        double kV = 0.0;
+        double D = 0.0;
         double k = 0.0;
+        double kV = 0.0;
+
+        // Biquad coefficients for Bell
+        double b0 = 1.0;
+        double b1 = 0.0;
+        double b2 = 0.0;
+        double a1 = 0.0;
+        double a2 = 0.0;
 
         bool isFirstOrder = false;
 
@@ -79,24 +86,39 @@ public:
             }
             else if (type == Type::Bell)
             {
-                double q_safe = std::max(q, 0.05);
-                double V = std::pow(10.0, gain / 20.0);
-                double k_raw = 1.0 / q_safe;
-                double V_safe = std::max(V, 1e-6);
-
-                if (gain >= 0.0)
+                double G0 = 1.0;
+                double G = std::pow(10.0, gain / 20.0);
+                double GB = std::sqrt(G0 * G);
+                
+                if (std::abs(G - G0) < 1e-5)
                 {
-                    // Boost
-                    D = 1.0 / (1.0 + g * k_raw + g * g);
-                    kV = k_raw;
-                    k = k_raw * V_safe;
+                    b0 = 1.0; b1 = 0.0; b2 = 0.0; a1 = 0.0; a2 = 0.0;
                 }
                 else
                 {
-                    // Cut
-                    D = 1.0 / (1.0 + g * (k_raw / V_safe) + g * g);
-                    kV = k_raw / V_safe;
-                    k = k_raw;
+                    double q_safe = std::max(q, 0.05);
+                    double wc = 2.0 * std::numbers::pi * f_safe / sr;
+                    double W = std::tan(wc / 2.0);
+                    
+                    double delta_w = wc / q_safe;
+                    
+                    double wn = std::numbers::pi / wc;
+                    double G1_sq = (std::pow(1.0 - wn*wn, 2.0) + std::pow(wn/q_safe, 2.0) * G*G) / 
+                                   (std::pow(1.0 - wn*wn, 2.0) + std::pow(wn/q_safe, 2.0));
+                    
+                    double c = (W*W * (G*G - G1_sq)) / (G1_sq - G0*G0);
+                    double D_val = std::sqrt(std::abs(c));
+                    
+                    double u = std::sqrt(std::abs((G*G - GB*GB) / (GB*GB - G0*G0)));
+                    double B = u * (W*W + c) * delta_w / (W * D_val);
+                    
+                    double a0_bq = 1.0 + B + c;
+                    a1 = 2.0 * (c - 1.0) / a0_bq;
+                    a2 = (1.0 - B + c) / a0_bq;
+                    
+                    b0 = (G0 + G * B + G0 * c) / a0_bq;
+                    b1 = 2.0 * (G0 * c - G0) / a0_bq;
+                    b2 = (G0 - G * B + G0 * c) / a0_bq;
                 }
             }
         }
@@ -152,20 +174,22 @@ public:
             }
             else if (type == Type::Bell)
             {
-                double q_safe = std::max(q, 0.05);
-                double V = std::pow(10.0, gain / 20.0);
+                // Biquad magnitude response: |H(e^jw)| = |b0 + b1 e^-jw + b2 e^-2jw| / |1 + a1 e^-jw + a2 e^-2jw|
+                double w = 2.0 * std::numbers::pi * f / sr;
                 
-                double r_over_q = R / q_safe;
-                double termNum = r_over_q * V;
-                double termDen = r_over_q / V;
+                double cos_w = std::cos(w);
+                double cos_2w = std::cos(2.0 * w);
                 
-                double numSq = (1.0 - R2) * (1.0 - R2) + termNum * termNum;
-                double denSq = (1.0 - R2) * (1.0 - R2) + termDen * termDen;
-                
-
-                
-                if (denSq <= 0.0) return 1.0;
-                return std::sqrt(numSq / denSq);
+                double num_sq = b0*b0 + b1*b1 + b2*b2 + 
+                                2.0 * (b0*b1 + b1*b2) * cos_w + 
+                                2.0 * b0*b2 * cos_2w;
+                                
+                double den_sq = 1.0 + a1*a1 + a2*a2 + 
+                                2.0 * (1.0*a1 + a1*a2) * cos_w + 
+                                2.0 * 1.0*a2 * cos_2w;
+                                
+                if (den_sq <= 0.0) return 1.0;
+                return std::sqrt(num_sq / den_sq);
             }
 
             return 1.0;
@@ -187,11 +211,6 @@ public:
 private:
     double currentSampleRate = 44100.0;
     int currentMaxBlockSize = 512;
-    bool enableOversampling = true;
-
-    juce::AudioBuffer<float> oversampleBuffer;
-    std::vector<FilterSection> upsampleFilters;
-    std::vector<FilterSection> downsampleFilters;
 
     double currentLowCutGainDb = -10.0;
     double currentHighCutGainDb = -10.0;

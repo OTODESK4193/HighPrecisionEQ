@@ -227,9 +227,6 @@ void PhaseDisplay::drawAnalyzerSpectrum(juce::Graphics& g, juce::Rectangle<int> 
     float h = static_cast<float>(bounds.getHeight());
     float xOffset = static_cast<float>(bounds.getX());
 
-    float minF = responseDisplay != nullptr ? responseDisplay->getMinF() : 1.0f;
-    float maxF = responseDisplay != nullptr ? responseDisplay->getMaxF() : 25000.0f;
-
     std::vector<float> energies = analyzer->getEnergies();
     
     const int numBands = AnalyzerDSP::NumBands;

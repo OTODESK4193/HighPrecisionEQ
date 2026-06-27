@@ -544,6 +544,37 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
     g.setGradientFill(cachedLineGrad);
     g.strokePath(cachedResponsePath, juce::PathStrokeType(2.0f, juce::PathStrokeType::mitered, juce::PathStrokeType::rounded));
 
+    // 6. 選択帯域の強調ハイライト（Hover含む）
+    if (activeDragBand != -1 || isHovering)
+    {
+        juce::Colour c = (activeDragBand == 0) ? pal.lowcut :
+                         (activeDragBand == 1) ? pal.bell1 :
+                         (activeDragBand >= 2 && activeDragBand <= 5) ? pal.bell1 : // just use pal.bell1 as fallback
+                         juce::Colours::white;
+                         
+        if (isHovering && activeDragBand == -1) c = juce::Colours::white.withAlpha(0.7f);
+
+        g.setColour(c.withAlpha(0.05f));
+        g.fillRect(0, 0, w, h);
+    }
+    
+    // 7. Hover時の周波数/Keyテキスト描画
+    if (isHovering && hoverText.isNotEmpty())
+    {
+        g.setColour(juce::Colour(0xff2a2a3e).withAlpha(0.8f));
+        int textW = 120;
+        int textH = 20;
+        int rx = mouseX + 10;
+        int ry = mouseY - 25;
+        if (rx + textW > w) rx = mouseX - textW - 10;
+        if (ry < 0) ry = mouseY + 10;
+        g.fillRoundedRectangle(static_cast<float>(rx), static_cast<float>(ry), static_cast<float>(textW), static_cast<float>(textH), 4.0f);
+        
+        g.setColour(juce::Colours::white);
+        g.setFont(juce::Font(juce::FontOptions("Outfit", 12.0f, juce::Font::bold)));
+        g.drawText(hoverText, rx, ry, textW, textH, juce::Justification::centred);
+    }
+
     // 5. EQコントロールポイントの描画
     drawEQPoints(g);
 }
@@ -612,8 +643,8 @@ void FreqResponseDisplay::drawEQPoints(juce::Graphics& g)
 void FreqResponseDisplay::mouseDown(const juce::MouseEvent& e)
 {
     activeDragBand = -1;
-    float mouseX = static_cast<float>(e.x);
-    float mouseY = static_cast<float>(e.y);
+    float mx = static_cast<float>(e.x);
+    float my = static_cast<float>(e.y);
 
     // 各ポイントへのクリック判定 (半径15ピクセル以内ならキャッチ)
     const float grabRadius = 15.0f;
@@ -623,7 +654,7 @@ void FreqResponseDisplay::mouseDown(const juce::MouseEvent& e)
     {
         float x = logFToX(static_cast<float>(currentCutoffHz));
         float y = gainToY(static_cast<float>(currentGainDb));
-        if (std::hypot(mouseX - x, mouseY - y) < grabRadius)
+        if (std::hypot(mx - x, my - y) < grabRadius)
         {
             activeDragBand = 0;
             if (editor != nullptr) editor->selectBand(HighPrecisionEQAudioProcessorEditor::SelectedBand::LowCut);
@@ -673,15 +704,15 @@ void FreqResponseDisplay::mouseDrag(const juce::MouseEvent& e)
 {
     if (editor == nullptr) return;
 
-    float mouseX = static_cast<float>(e.x);
-    float mouseY = static_cast<float>(e.y);
+    float mx = static_cast<float>(e.x);
+    float my = static_cast<float>(e.y);
 
     // 画面外へのドラッグ制限
-    mouseX = std::clamp(mouseX, 0.0f, static_cast<float>(getWidth()));
-    mouseY = std::clamp(mouseY, 0.0f, static_cast<float>(getHeight()));
+    mx = std::clamp(mx, 0.0f, static_cast<float>(getWidth()));
+    my = std::clamp(my, 0.0f, static_cast<float>(getHeight()));
 
-    float dragFreq = xToLogF(mouseX);
-    float dragGain = yToGain(mouseY);
+    float dragFreq = xToLogF(mx);
+    float dragGain = yToGain(my);
 
     if (processor != nullptr && activeDragBand != -1)
     {
@@ -784,8 +815,8 @@ void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::
     // 1. Ctrlキー押下時の周波数軸ズーム
     if (e.mods.isCtrlDown())
     {
-        float mouseX = static_cast<float>(e.x);
-        float targetF = xToLogF(mouseX);
+        float mx = static_cast<float>(e.x);
+        float targetF = xToLogF(mx);
         
         float zoomFactor = std::pow(1.15f, -wheel.deltaY); // 上スクロールで拡大、下で縮小
         
@@ -817,8 +848,8 @@ void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::
     auto& apvts = processor->apvts;
 
     // マウスカーソルがEQポイントの上にあるか判定
-    float mouseX = static_cast<float>(e.x);
-    float mouseY = static_cast<float>(e.y);
+    float mx = static_cast<float>(e.x);
+    float my = static_cast<float>(e.y);
     const float grabRadius = 15.0f;
     int targetBand = -1;
 
@@ -827,7 +858,7 @@ void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::
     {
         float x = logFToX(static_cast<float>(currentCutoffHz));
         float y = gainToY(static_cast<float>(currentGainDb));
-        if (std::hypot(mouseX - x, mouseY - y) < grabRadius)
+        if (std::hypot(mx - x, my - y) < grabRadius)
         {
             targetBand = 0;
         }
@@ -838,7 +869,7 @@ void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::
     {
         float x = logFToX(static_cast<float>(currentHighCutFreq));
         float y = gainToY(static_cast<float>(currentHighCutGainDb));
-        if (std::hypot(mouseX - x, mouseY - y) < grabRadius)
+        if (std::hypot(mx - x, my - y) < grabRadius)
         {
             targetBand = 1;
         }
@@ -853,7 +884,7 @@ void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::
             {
                 float x = logFToX(static_cast<float>(bellParams[i].freq));
                 float y = gainToY(static_cast<float>(bellParams[i].gain));
-                if (std::hypot(mouseX - x, mouseY - y) < grabRadius)
+                if (std::hypot(mx - x, my - y) < grabRadius)
                 {
                     targetBand = i + 2;
                     break;
