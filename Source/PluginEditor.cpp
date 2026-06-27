@@ -404,14 +404,31 @@ void HighPrecisionEQAudioProcessorEditor::updateGraph()
     bool hcEnable = processorRef.apvts.getRawParameterValue("highcut_enable")->load() > 0.5f;
 
     std::array<FreqResponseDisplay::BellParam, 4> bells;
+    std::array<MinimumPhaseEQ::BellParam, 4> eqBells;
     for (int i = 0; i < 4; ++i)
     {
         juce::String suffix = juce::String(i + 1);
-        bells[i].freq = processorRef.apvts.getRawParameterValue("bell_freq_" + suffix)->load();
-        bells[i].gain = processorRef.apvts.getRawParameterValue("bell_gain_" + suffix)->load();
-        bells[i].q = processorRef.apvts.getRawParameterValue("bell_q_" + suffix)->load();
-        bells[i].active = processorRef.apvts.getRawParameterValue("bell_enable_" + suffix)->load() > 0.5f;
+        double bf = processorRef.apvts.getRawParameterValue("bell_freq_" + suffix)->load();
+        double bg = processorRef.apvts.getRawParameterValue("bell_gain_" + suffix)->load();
+        double bq = processorRef.apvts.getRawParameterValue("bell_q_" + suffix)->load();
+        bool ba = processorRef.apvts.getRawParameterValue("bell_enable_" + suffix)->load() > 0.5f;
+
+        bells[i].freq = bf;
+        bells[i].gain = bg;
+        bells[i].q = bq;
+        bells[i].active = ba;
+
+        eqBells[i].freq = bf;
+        eqBells[i].gain = bg;
+        eqBells[i].q = bq;
+        eqBells[i].active = ba;
     }
+
+    // DAWが停止中（processBlockが呼ばれない状態）でもEQカーブが即座に反映されるよう、
+    // GUI側からもパラメータの同期を強制的に呼び出してpendingSectionsを最新にする
+    processorRef.getEQ().updateParameters(lcCutoff, lcOrder, lcEnable, lcGain,
+                                          hcFreq, hcOrder, hcEnable, hcGain,
+                                          eqBells);
 
     freqDisplay.updateParameters(lcCutoff, lcOrder, lcGain, lcEnable,
                                  hcFreq, hcOrder, hcGain, hcEnable,

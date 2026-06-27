@@ -562,7 +562,7 @@ void FreqResponseDisplay::drawEQPoints(juce::Graphics& g)
     if (currentHighCutEnable)
     {
         float x = logFToX(static_cast<float>(currentHighCutFreq));
-        float y = gainToY(0.0f); // HighCutはゲインパラメータが無いので0dBライン
+        float y = gainToY(static_cast<float>(currentHighCutGainDb));
 
         g.setColour(selectedBandIdx == 1 ? juce::Colours::white : pal.bell1);
         g.fillEllipse(x - 6.0f, y - 6.0f, 12.0f, 12.0f);
@@ -624,7 +624,7 @@ void FreqResponseDisplay::mouseDown(const juce::MouseEvent& e)
     if (currentHighCutEnable)
     {
         float x = logFToX(static_cast<float>(currentHighCutFreq));
-        float y = gainToY(0.0f);
+        float y = gainToY(static_cast<float>(currentHighCutGainDb));
         if (std::hypot(mouseX - x, mouseY - y) < grabRadius)
         {
             activeDragBand = 1;
@@ -825,7 +825,7 @@ void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::
     if (targetBand == -1 && currentHighCutEnable)
     {
         float x = logFToX(static_cast<float>(currentHighCutFreq));
-        float y = gainToY(0.0f);
+        float y = gainToY(static_cast<float>(currentHighCutGainDb));
         if (std::hypot(mouseX - x, mouseY - y) < grabRadius)
         {
             targetBand = 1;

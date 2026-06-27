@@ -160,6 +160,29 @@ void HighPrecisionEQAudioProcessor::prepareToPlay(double sampleRate, int samples
     dryDelayBuffer.setSize(numChannels, 1);
     dryDelayBuffer.clear();
     dryDelayWriteIdx = 0;
+
+    // GUIを開く前、またはDAW停止中にprepareToPlayが呼ばれた場合でも
+    // 確実にEQカーブが初期化されるよう、ここで一度パラメータを強制同期する
+    std::array<MinimumPhaseEQ::BellParam, 4> bells;
+    for (int i = 0; i < 4; ++i) {
+        juce::String idSuffix = juce::String(i + 1);
+        bells[static_cast<size_t>(i)].freq = static_cast<double>(apvts.getRawParameterValue("bell_freq_" + idSuffix)->load());
+        bells[static_cast<size_t>(i)].gain = static_cast<double>(apvts.getRawParameterValue("bell_gain_" + idSuffix)->load());
+        bells[static_cast<size_t>(i)].q = static_cast<double>(apvts.getRawParameterValue("bell_q_" + idSuffix)->load());
+        bells[static_cast<size_t>(i)].active = apvts.getRawParameterValue("bell_enable_" + idSuffix)->load() > 0.5f;
+    }
+
+    minimumPhaseEQ.updateParameters(
+        static_cast<double>(apvts.getRawParameterValue("cutoffHz")->load()),
+        std::clamp(static_cast<int>(std::round(apvts.getRawParameterValue("slopeDbOct")->load() / 12.0f)), 1, 8),
+        apvts.getRawParameterValue("lowcut_enable")->load() > 0.5f,
+        static_cast<double>(apvts.getRawParameterValue("gainDb")->load()),
+        static_cast<double>(apvts.getRawParameterValue("highcut_freq")->load()),
+        std::clamp(static_cast<int>(std::round(apvts.getRawParameterValue("highcut_slope")->load() / 12.0f)), 1, 8),
+        apvts.getRawParameterValue("highcut_enable")->load() > 0.5f,
+        static_cast<double>(apvts.getRawParameterValue("highcut_gainDb")->load()),
+        bells
+    );
 }
 
 void HighPrecisionEQAudioProcessor::releaseResources()
