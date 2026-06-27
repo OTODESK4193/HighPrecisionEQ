@@ -112,11 +112,11 @@ public:
                     double B = u * (W*W + c) * delta_w / (W * D_val);
                     
                     double a0_bq = 1.0 + B + c;
-                    a1 = 2.0 * (c - 1.0) / a0_bq;
+                    a1 = -2.0 * std::cos(wc) * (1.0 + c) / a0_bq;
                     a2 = (1.0 - B + c) / a0_bq;
                     
                     b0 = (G0 + G * B + G0 * c) / a0_bq;
-                    b1 = 2.0 * (G0 * c - G0) / a0_bq;
+                    b1 = -2.0 * std::cos(wc) * (G0 + G0 * c) / a0_bq;
                     b2 = (G0 - G * B + G0 * c) / a0_bq;
                 }
             }
