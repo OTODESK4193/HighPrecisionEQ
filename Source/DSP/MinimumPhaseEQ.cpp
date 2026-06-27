@@ -13,6 +13,34 @@ void MinimumPhaseEQ::prepare(double sampleRate, int maxBlockSize)
 {
     currentSampleRate = sampleRate;
     currentMaxBlockSize = maxBlockSize;
+    
+    if (enableOversampling)
+    {
+        oversampleBuffer.setSize(2, maxBlockSize * 2);
+        oversampleBuffer.clear();
+        
+        double osSr = sampleRate * 2.0;
+        double cutoff = sampleRate * 0.45; // Anti-aliasing filter at 45% of original sr
+        
+        upsampleFilters.clear();
+        downsampleFilters.clear();
+        for (int k = 0; k < 4; ++k)
+        {
+            FilterSection sec;
+            sec.type = FilterSection::Type::LowPass;
+            sec.freq = cutoff;
+            sec.active = true;
+            sec.isFirstOrder = false;
+            
+            double angle = std::numbers::pi * (2.0 * k + 1.0) / (2.0 * 8.0);
+            sec.q = 1.0 / (2.0 * std::sin(angle));
+            sec.updateCoefficients(osSr);
+            
+            upsampleFilters.push_back(sec);
+            downsampleFilters.push_back(sec);
+        }
+    }
+    
     reset();
 }
 
@@ -23,6 +51,12 @@ void MinimumPhaseEQ::reset()
         sec.reset();
     for (auto& sec : pendingSections)
         sec.reset();
+        
+    if (enableOversampling)
+    {
+        for (auto& sec : upsampleFilters) sec.reset();
+        for (auto& sec : downsampleFilters) sec.reset();
+    }
 }
 
 void MinimumPhaseEQ::updateParameters(double lowCutFreq, int lowCutOrder, bool lowCutEnable, double lowCutGainDb,
@@ -39,6 +73,8 @@ void MinimumPhaseEQ::updateParameters(double lowCutFreq, int lowCutOrder, bool l
     // mix の計算 (0.0 〜 1.0)
     lowCutMix = std::clamp(std::abs(lowCutGainDb) / 10.0, 0.0, 1.0);
     highCutMix = std::clamp(std::abs(highCutGainDb) / 10.0, 0.0, 1.0);
+
+    double targetSr = enableOversampling ? (currentSampleRate * 2.0) : currentSampleRate;
 
     for (size_t i = 0; i < 4; ++i)
     {
@@ -65,7 +101,7 @@ void MinimumPhaseEQ::updateParameters(double lowCutFreq, int lowCutOrder, bool l
             sec.freq = lowCutFreq;
             sec.active = true;
             sec.isFirstOrder = true;
-            sec.updateCoefficients(currentSampleRate);
+            sec.updateCoefficients(targetSr);
             newSections.push_back(sec);
         }
 
@@ -87,7 +123,7 @@ void MinimumPhaseEQ::updateParameters(double lowCutFreq, int lowCutOrder, bool l
             double smoothing = 1.0 - alpha * std::exp(-beta * static_cast<double>(k));
             sec.q = Q_butterworth * smoothing;
 
-            sec.updateCoefficients(currentSampleRate);
+            sec.updateCoefficients(targetSr);
             newSections.push_back(sec);
         }
     }
@@ -106,7 +142,7 @@ void MinimumPhaseEQ::updateParameters(double lowCutFreq, int lowCutOrder, bool l
             sec.freq = highCutFreq;
             sec.active = true;
             sec.isFirstOrder = true;
-            sec.updateCoefficients(currentSampleRate);
+            sec.updateCoefficients(targetSr);
             newSections.push_back(sec);
         }
 
@@ -128,7 +164,7 @@ void MinimumPhaseEQ::updateParameters(double lowCutFreq, int lowCutOrder, bool l
             double smoothing = 1.0 - alpha * std::exp(-beta * static_cast<double>(k));
             sec.q = Q_butterworth * smoothing;
 
-            sec.updateCoefficients(currentSampleRate);
+            sec.updateCoefficients(targetSr);
             newSections.push_back(sec);
         }
     }
@@ -145,7 +181,7 @@ void MinimumPhaseEQ::updateParameters(double lowCutFreq, int lowCutOrder, bool l
             sec.q = optimizedBells[static_cast<size_t>(i)].q;
             sec.active = true;
             sec.isFirstOrder = false;
-            sec.updateCoefficients(currentSampleRate);
+            sec.updateCoefficients(targetSr);
             newSections.push_back(sec);
         }
     }
@@ -202,140 +238,201 @@ void MinimumPhaseEQ::process(juce::AudioBuffer<float>& buffer)
 
     for (int i = 0; i < numSamples; ++i)
     {
-        double x_L = static_cast<double>(left[i]);
-        double x_R = static_cast<double>(right[i]);
-        __m256d x = _mm256_setr_pd(x_L, x_R, 0.0, 0.0);
-
-        // A. LowCut 処理 (HPF)
-        __m256d x_lc_in = x;
-        for (auto& sec : activeSections)
-        {
-            if (sec.type != FilterSection::Type::HighPass || !sec.active)
-                continue;
-
-            __m256d s1_vec = _mm256_load_pd(sec.s1);
-            __m256d s2_vec = _mm256_load_pd(sec.s2);
-
-            __m256d g_vec = _mm256_set1_pd(sec.g);
-            __m256d D_vec = _mm256_set1_pd(sec.D);
-            __m256d R2_vec = _mm256_set1_pd(sec.R2);
-
-            __m256d y_vec = x;
-
-            if (sec.isFirstOrder)
-            {
-                __m256d hp = _mm256_mul_pd(_mm256_sub_pd(x, s1_vec), D_vec);
-                __m256d v1 = _mm256_mul_pd(g_vec, hp);
-                s1_vec = _mm256_add_pd(s1_vec, _mm256_mul_pd(two_vec, v1));
-                y_vec = hp;
-            }
-            else
-            {
-                __m256d R2_plus_g = _mm256_add_pd(R2_vec, g_vec);
-                __m256d tmp = _mm256_sub_pd(_mm256_sub_pd(x, _mm256_mul_pd(R2_plus_g, s1_vec)), s2_vec);
-                __m256d hp = _mm256_mul_pd(tmp, D_vec);
-                __m256d bp = _mm256_add_pd(_mm256_mul_pd(g_vec, hp), s1_vec);
-                s1_vec = _mm256_add_pd(bp, _mm256_mul_pd(g_vec, hp));
-                __m256d lp = _mm256_add_pd(_mm256_mul_pd(g_vec, bp), s2_vec);
-                s2_vec = _mm256_add_pd(lp, _mm256_mul_pd(g_vec, bp));
-                y_vec = hp;
-            }
-
-            _mm256_store_pd(sec.s1, s1_vec);
-            _mm256_store_pd(sec.s2, s2_vec);
-            x = y_vec;
-        }
+        double x_L_orig = static_cast<double>(left[i]);
+        double x_R_orig = static_cast<double>(right[i]);
         
-        if (currentLowCutEnable)
+        double out_L = 0.0;
+        double out_R = 0.0;
+        
+        int oversampleFactor = enableOversampling ? 2 : 1;
+
+        for (int os = 0; os < oversampleFactor; ++os)
         {
-            __m256d mix_vec = _mm256_set1_pd(lowCutMix);
-            __m256d one_minus_mix = _mm256_set1_pd(1.0 - lowCutMix);
-            x = _mm256_add_pd(_mm256_mul_pd(one_minus_mix, x_lc_in), _mm256_mul_pd(mix_vec, x));
-        }
-
-        // B. HighCut 処理 (LPF)
-        __m256d x_hc_in = x;
-        for (auto& sec : activeSections)
-        {
-            if (sec.type != FilterSection::Type::LowPass || !sec.active)
-                continue;
-
-            __m256d s1_vec = _mm256_load_pd(sec.s1);
-            __m256d s2_vec = _mm256_load_pd(sec.s2);
-
-            __m256d g_vec = _mm256_set1_pd(sec.g);
-            __m256d D_vec = _mm256_set1_pd(sec.D);
-            __m256d R2_vec = _mm256_set1_pd(sec.R2);
-
-            __m256d y_vec = x;
-
-            if (sec.isFirstOrder)
+            double in_L = (os == 0) ? (x_L_orig * oversampleFactor) : 0.0;
+            double in_R = (os == 0) ? (x_R_orig * oversampleFactor) : 0.0;
+            
+            __m256d x = _mm256_setr_pd(in_L, in_R, 0.0, 0.0);
+            
+            if (enableOversampling)
             {
-                __m256d lp = _mm256_mul_pd(_mm256_add_pd(_mm256_mul_pd(g_vec, x), s1_vec), D_vec);
-                __m256d v1 = _mm256_sub_pd(lp, s1_vec);
-                s1_vec = _mm256_add_pd(lp, v1);
-                y_vec = lp;
+                // Upsample filter (LPF)
+                for (auto& sec : upsampleFilters)
+                {
+                    __m256d s1_vec = _mm256_load_pd(sec.s1);
+                    __m256d s2_vec = _mm256_load_pd(sec.s2);
+                    __m256d g_vec = _mm256_set1_pd(sec.g);
+                    __m256d D_vec = _mm256_set1_pd(sec.D);
+                    __m256d R2_vec = _mm256_set1_pd(sec.R2);
+
+                    __m256d R2_plus_g = _mm256_add_pd(R2_vec, g_vec);
+                    __m256d tmp = _mm256_sub_pd(_mm256_sub_pd(x, _mm256_mul_pd(R2_plus_g, s1_vec)), s2_vec);
+                    __m256d hp = _mm256_mul_pd(tmp, D_vec);
+                    __m256d bp = _mm256_add_pd(_mm256_mul_pd(g_vec, hp), s1_vec);
+                    s1_vec = _mm256_add_pd(bp, _mm256_mul_pd(g_vec, hp));
+                    __m256d lp = _mm256_add_pd(_mm256_mul_pd(g_vec, bp), s2_vec);
+                    s2_vec = _mm256_add_pd(lp, _mm256_mul_pd(g_vec, bp));
+                    x = lp;
+                    
+                    _mm256_store_pd(sec.s1, s1_vec);
+                    _mm256_store_pd(sec.s2, s2_vec);
+                }
             }
-            else
+
+            // A. LowCut 処理 (HPF)
+            __m256d x_lc_in = x;
+            for (auto& sec : activeSections)
             {
-                __m256d R2_plus_g = _mm256_add_pd(R2_vec, g_vec);
-                __m256d tmp = _mm256_sub_pd(_mm256_sub_pd(x, _mm256_mul_pd(R2_plus_g, s1_vec)), s2_vec);
+                if (sec.type != FilterSection::Type::HighPass || !sec.active)
+                    continue;
+
+                __m256d s1_vec = _mm256_load_pd(sec.s1);
+                __m256d s2_vec = _mm256_load_pd(sec.s2);
+                __m256d g_vec = _mm256_set1_pd(sec.g);
+                __m256d D_vec = _mm256_set1_pd(sec.D);
+                __m256d R2_vec = _mm256_set1_pd(sec.R2);
+
+                __m256d y_vec = x;
+
+                if (sec.isFirstOrder)
+                {
+                    __m256d hp = _mm256_mul_pd(_mm256_sub_pd(x, s1_vec), D_vec);
+                    __m256d v1 = _mm256_mul_pd(g_vec, hp);
+                    s1_vec = _mm256_add_pd(s1_vec, _mm256_mul_pd(two_vec, v1));
+                    y_vec = hp;
+                }
+                else
+                {
+                    __m256d R2_plus_g = _mm256_add_pd(R2_vec, g_vec);
+                    __m256d tmp = _mm256_sub_pd(_mm256_sub_pd(x, _mm256_mul_pd(R2_plus_g, s1_vec)), s2_vec);
+                    __m256d hp = _mm256_mul_pd(tmp, D_vec);
+                    __m256d bp = _mm256_add_pd(_mm256_mul_pd(g_vec, hp), s1_vec);
+                    s1_vec = _mm256_add_pd(bp, _mm256_mul_pd(g_vec, hp));
+                    __m256d lp = _mm256_add_pd(_mm256_mul_pd(g_vec, bp), s2_vec);
+                    s2_vec = _mm256_add_pd(lp, _mm256_mul_pd(g_vec, bp));
+                    y_vec = hp;
+                }
+
+                _mm256_store_pd(sec.s1, s1_vec);
+                _mm256_store_pd(sec.s2, s2_vec);
+                x = y_vec;
+            }
+            
+            if (currentLowCutEnable)
+            {
+                __m256d mix_vec = _mm256_set1_pd(lowCutMix);
+                __m256d one_minus_mix = _mm256_set1_pd(1.0 - lowCutMix);
+                x = _mm256_add_pd(_mm256_mul_pd(one_minus_mix, x_lc_in), _mm256_mul_pd(mix_vec, x));
+            }
+
+            // B. HighCut 処理 (LPF)
+            __m256d x_hc_in = x;
+            for (auto& sec : activeSections)
+            {
+                if (sec.type != FilterSection::Type::LowPass || !sec.active)
+                    continue;
+
+                __m256d s1_vec = _mm256_load_pd(sec.s1);
+                __m256d s2_vec = _mm256_load_pd(sec.s2);
+                __m256d g_vec = _mm256_set1_pd(sec.g);
+                __m256d D_vec = _mm256_set1_pd(sec.D);
+                __m256d R2_vec = _mm256_set1_pd(sec.R2);
+
+                __m256d y_vec = x;
+
+                if (sec.isFirstOrder)
+                {
+                    __m256d lp = _mm256_mul_pd(_mm256_add_pd(_mm256_mul_pd(g_vec, x), s1_vec), D_vec);
+                    __m256d v1 = _mm256_sub_pd(lp, s1_vec);
+                    s1_vec = _mm256_add_pd(lp, v1);
+                    y_vec = lp;
+                }
+                else
+                {
+                    __m256d R2_plus_g = _mm256_add_pd(R2_vec, g_vec);
+                    __m256d tmp = _mm256_sub_pd(_mm256_sub_pd(x, _mm256_mul_pd(R2_plus_g, s1_vec)), s2_vec);
+                    __m256d hp = _mm256_mul_pd(tmp, D_vec);
+                    __m256d bp = _mm256_add_pd(_mm256_mul_pd(g_vec, hp), s1_vec);
+                    s1_vec = _mm256_add_pd(bp, _mm256_mul_pd(g_vec, hp));
+                    __m256d lp = _mm256_add_pd(_mm256_mul_pd(g_vec, bp), s2_vec);
+                    s2_vec = _mm256_add_pd(lp, _mm256_mul_pd(g_vec, bp));
+                    y_vec = lp;
+                }
+
+                _mm256_store_pd(sec.s1, s1_vec);
+                _mm256_store_pd(sec.s2, s2_vec);
+                x = y_vec;
+            }
+
+            if (currentHighCutEnable)
+            {
+                __m256d mix_vec = _mm256_set1_pd(highCutMix);
+                __m256d one_minus_mix = _mm256_set1_pd(1.0 - highCutMix);
+                x = _mm256_add_pd(_mm256_mul_pd(one_minus_mix, x_hc_in), _mm256_mul_pd(mix_vec, x));
+            }
+
+            // C. Bells 処理
+            for (auto& sec : activeSections)
+            {
+                if (sec.type != FilterSection::Type::Bell || !sec.active)
+                    continue;
+
+                __m256d s1_vec = _mm256_load_pd(sec.s1);
+                __m256d s2_vec = _mm256_load_pd(sec.s2);
+                __m256d g_vec = _mm256_set1_pd(sec.g);
+                __m256d D_vec = _mm256_set1_pd(sec.D);
+                __m256d kV_vec = _mm256_set1_pd(sec.kV);
+                __m256d k_vec = _mm256_set1_pd(sec.k);
+
+                __m256d kV_plus_g = _mm256_add_pd(kV_vec, g_vec);
+                __m256d tmp = _mm256_sub_pd(_mm256_sub_pd(x, _mm256_mul_pd(kV_plus_g, s1_vec)), s2_vec);
                 __m256d hp = _mm256_mul_pd(tmp, D_vec);
                 __m256d bp = _mm256_add_pd(_mm256_mul_pd(g_vec, hp), s1_vec);
                 s1_vec = _mm256_add_pd(bp, _mm256_mul_pd(g_vec, hp));
                 __m256d lp = _mm256_add_pd(_mm256_mul_pd(g_vec, bp), s2_vec);
                 s2_vec = _mm256_add_pd(lp, _mm256_mul_pd(g_vec, bp));
-                y_vec = lp;
+                __m256d y_vec = _mm256_add_pd(_mm256_add_pd(lp, _mm256_mul_pd(k_vec, bp)), hp);
+
+                _mm256_store_pd(sec.s1, s1_vec);
+                _mm256_store_pd(sec.s2, s2_vec);
+                x = y_vec;
             }
 
-            _mm256_store_pd(sec.s1, s1_vec);
-            _mm256_store_pd(sec.s2, s2_vec);
-            x = y_vec;
+            if (enableOversampling)
+            {
+                // Downsample filter (LPF)
+                for (auto& sec : downsampleFilters)
+                {
+                    __m256d s1_vec = _mm256_load_pd(sec.s1);
+                    __m256d s2_vec = _mm256_load_pd(sec.s2);
+                    __m256d g_vec = _mm256_set1_pd(sec.g);
+                    __m256d D_vec = _mm256_set1_pd(sec.D);
+                    __m256d R2_vec = _mm256_set1_pd(sec.R2);
+
+                    __m256d R2_plus_g = _mm256_add_pd(R2_vec, g_vec);
+                    __m256d tmp = _mm256_sub_pd(_mm256_sub_pd(x, _mm256_mul_pd(R2_plus_g, s1_vec)), s2_vec);
+                    __m256d hp = _mm256_mul_pd(tmp, D_vec);
+                    __m256d bp = _mm256_add_pd(_mm256_mul_pd(g_vec, hp), s1_vec);
+                    s1_vec = _mm256_add_pd(bp, _mm256_mul_pd(g_vec, hp));
+                    __m256d lp = _mm256_add_pd(_mm256_mul_pd(g_vec, bp), s2_vec);
+                    s2_vec = _mm256_add_pd(lp, _mm256_mul_pd(g_vec, bp));
+                    x = lp;
+                    
+                    _mm256_store_pd(sec.s1, s1_vec);
+                    _mm256_store_pd(sec.s2, s2_vec);
+                }
+            }
+
+            if (os == 0)
+            {
+                alignas(32) double out_samples[4];
+                _mm256_store_pd(out_samples, x);
+                out_L = out_samples[0];
+                out_R = out_samples[1];
+            }
         }
 
-        if (currentHighCutEnable)
-        {
-            __m256d mix_vec = _mm256_set1_pd(highCutMix);
-            __m256d one_minus_mix = _mm256_set1_pd(1.0 - highCutMix);
-            x = _mm256_add_pd(_mm256_mul_pd(one_minus_mix, x_hc_in), _mm256_mul_pd(mix_vec, x));
-        }
-
-        // C. Bells 処理
-        for (auto& sec : activeSections)
-        {
-            if (sec.type != FilterSection::Type::Bell || !sec.active)
-                continue;
-
-            __m256d s1_vec = _mm256_load_pd(sec.s1);
-            __m256d s2_vec = _mm256_load_pd(sec.s2);
-
-            __m256d g_vec = _mm256_set1_pd(sec.g);
-            __m256d D_vec = _mm256_set1_pd(sec.D);
-            __m256d kV_vec = _mm256_set1_pd(sec.kV);
-            __m256d k_vec = _mm256_set1_pd(sec.k);
-
-            __m256d kV_plus_g = _mm256_add_pd(kV_vec, g_vec);
-            __m256d tmp = _mm256_sub_pd(_mm256_sub_pd(x, _mm256_mul_pd(kV_plus_g, s1_vec)), s2_vec);
-            __m256d hp = _mm256_mul_pd(tmp, D_vec);
-            __m256d bp = _mm256_add_pd(_mm256_mul_pd(g_vec, hp), s1_vec);
-            s1_vec = _mm256_add_pd(bp, _mm256_mul_pd(g_vec, hp));
-            __m256d lp = _mm256_add_pd(_mm256_mul_pd(g_vec, bp), s2_vec);
-            s2_vec = _mm256_add_pd(lp, _mm256_mul_pd(g_vec, bp));
-            __m256d y_vec = _mm256_add_pd(_mm256_add_pd(lp, _mm256_mul_pd(k_vec, bp)), hp);
-
-            _mm256_store_pd(sec.s1, s1_vec);
-            _mm256_store_pd(sec.s2, s2_vec);
-            x = y_vec;
-        }
-
-        alignas(32) double out_samples[4];
-        _mm256_store_pd(out_samples, x);
-
-        left[i] = static_cast<float>(out_samples[0]);
-        if (numChannels > 1)
-        {
-            right[i] = static_cast<float>(out_samples[1]);
-        }
+        left[i] = static_cast<float>(out_L);
+        if (numChannels > 1) right[i] = static_cast<float>(out_R);
     }
 }
 
@@ -343,13 +440,15 @@ double MinimumPhaseEQ::getMagnitudeForFrequency(double freq) const
 {
     const juce::CriticalSection::ScopedLockType sl(lock);
 
+    double targetSr = enableOversampling ? (currentSampleRate * 2.0) : currentSampleRate;
+
     // 1. LowCut の応答特性
     double lcMag = 1.0;
     for (const auto& sec : pendingSections)
     {
         if (sec.active && sec.type == FilterSection::Type::HighPass)
         {
-            lcMag *= sec.getMagnitudeForFrequency(freq, currentSampleRate);
+            lcMag *= sec.getMagnitudeForFrequency(freq, targetSr);
         }
     }
     if (currentLowCutEnable)
@@ -363,7 +462,7 @@ double MinimumPhaseEQ::getMagnitudeForFrequency(double freq) const
     {
         if (sec.active && sec.type == FilterSection::Type::LowPass)
         {
-            hcMag *= sec.getMagnitudeForFrequency(freq, currentSampleRate);
+            hcMag *= sec.getMagnitudeForFrequency(freq, targetSr);
         }
     }
     if (currentHighCutEnable)
@@ -377,7 +476,7 @@ double MinimumPhaseEQ::getMagnitudeForFrequency(double freq) const
     {
         if (sec.active && sec.type == FilterSection::Type::Bell)
         {
-            bellMag *= sec.getMagnitudeForFrequency(freq, currentSampleRate);
+            bellMag *= sec.getMagnitudeForFrequency(freq, targetSr);
         }
     }
 

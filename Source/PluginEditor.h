@@ -91,6 +91,7 @@ private:
     juce::TextButton enableButtons[6]; // ON/OFFボタン
 
     juce::TextButton diffButton{ "Diff" };
+    juce::TextButton holdButton{ "Hold" };
     juce::TextButton bypassButton{ "Bypass" };
     juce::TextButton colorButton{ "Color" };
 
@@ -106,6 +107,7 @@ private:
     std::unique_ptr<ButtonAttachment> enableAttachments[6];
 
     std::unique_ptr<ButtonAttachment> diffAttachment;
+    std::unique_ptr<ButtonAttachment> holdAttachment;
     std::unique_ptr<ButtonAttachment> bypassAttachment;
 
     void updateAttachments();

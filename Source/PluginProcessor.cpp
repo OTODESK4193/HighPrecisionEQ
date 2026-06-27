@@ -51,7 +51,7 @@ HighPrecisionEQAudioProcessor::createParameterLayout()
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID{ "bell_gain_" + idSuffix, 1 },
             "Bell " + idSuffix + " Gain",
-            juce::NormalisableRange<float>(-18.0f, 18.0f, 0.1f),
+            juce::NormalisableRange<float>(-12.0f, 12.0f, 0.1f),
             0.0f,
             juce::AudioParameterFloatAttributes().withLabel("dB")
         ));
@@ -71,6 +71,12 @@ HighPrecisionEQAudioProcessor::createParameterLayout()
     params.push_back(std::make_unique<juce::AudioParameterBool>(
         juce::ParameterID{ "listenDiff", 1 },
         "Listen Diff",
+        false
+    ));
+
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID{ "analyzer_hold", 1 },
+        "Analyzer Hold",
         false
     ));
 
@@ -214,6 +220,9 @@ void HighPrecisionEQAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
 
     bool listenDiff = apvts.getRawParameterValue("listenDiff")->load() > 0.5f;
     bool bypass = apvts.getRawParameterValue("bypass")->load() > 0.5f;
+    bool holdEnable = apvts.getRawParameterValue("analyzer_hold")->load() > 0.5f;
+    
+    analyzerDSP.setHold(holdEnable);
 
     int numChannels = buffer.getNumChannels();
     int numSamples = buffer.getNumSamples();

@@ -187,6 +187,11 @@ public:
 private:
     double currentSampleRate = 44100.0;
     int currentMaxBlockSize = 512;
+    bool enableOversampling = true;
+
+    juce::AudioBuffer<float> oversampleBuffer;
+    std::vector<FilterSection> upsampleFilters;
+    std::vector<FilterSection> downsampleFilters;
 
     double currentLowCutGainDb = -10.0;
     double currentHighCutGainDb = -10.0;

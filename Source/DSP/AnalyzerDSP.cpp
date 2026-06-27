@@ -5,8 +5,12 @@ AnalyzerDSP::AnalyzerDSP()
 {
     bands.resize(NumBands);
     peaks = std::make_unique<std::atomic<float>[]>(NumBands);
+    holdPeaks = std::make_unique<std::atomic<float>[]>(NumBands);
     for (int i = 0; i < NumBands; ++i)
+    {
         peaks[i].store(-180.0f, std::memory_order_relaxed);
+        holdPeaks[i].store(-180.0f, std::memory_order_relaxed);
+    }
 
     ringBuffer.resize(BufferSize, 0.0f);
     
@@ -180,11 +184,24 @@ void AnalyzerDSP::processInternal(const float* data, int numSamples)
         }
     }
     
-    // 最終ピーク値の更新
+    // 最終ピーク値とホールド値の更新
+    bool isHold = holdEnabled.load(std::memory_order_relaxed);
     for (int b = 0; b < NumBands; ++b)
     {
         float db = static_cast<float>(20.0 * std::log10(std::max(1e-9, bands[static_cast<size_t>(b)].env)));
         peaks[static_cast<size_t>(b)].store(db, std::memory_order_relaxed);
+        
+        if (isHold)
+        {
+            float currentHold = holdPeaks[static_cast<size_t>(b)].load(std::memory_order_relaxed);
+            if (db > currentHold)
+                holdPeaks[static_cast<size_t>(b)].store(db, std::memory_order_relaxed);
+        }
+        else
+        {
+            // ホールドOFFのときは現在の値で上書き（またはリセット）
+            holdPeaks[static_cast<size_t>(b)].store(db, std::memory_order_relaxed);
+        }
     }
 
     updateCount.fetch_add(1, std::memory_order_release);
@@ -198,4 +215,28 @@ std::vector<float> AnalyzerDSP::getEnergies()
         res[static_cast<size_t>(i)] = peaks[static_cast<size_t>(i)].load(std::memory_order_relaxed);
     }
     return res;
+}
+
+std::vector<float> AnalyzerDSP::getHoldEnergies()
+{
+    std::vector<float> res(NumBands);
+    for (int i = 0; i < NumBands; ++i)
+    {
+        res[static_cast<size_t>(i)] = holdPeaks[static_cast<size_t>(i)].load(std::memory_order_relaxed);
+    }
+    return res;
+}
+
+void AnalyzerDSP::setHold(bool shouldHold)
+{
+    bool wasHold = holdEnabled.exchange(shouldHold);
+    if (!wasHold && shouldHold)
+    {
+        // OFFからONになった瞬間、現在のピーク値でホールドを初期化する
+        for (int i = 0; i < NumBands; ++i)
+        {
+            float db = peaks[i].load(std::memory_order_relaxed);
+            holdPeaks[i].store(db, std::memory_order_relaxed);
+        }
+    }
 }

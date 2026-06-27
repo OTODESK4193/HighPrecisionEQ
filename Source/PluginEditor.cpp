@@ -79,6 +79,7 @@ HighPrecisionEQAudioProcessorEditor::HighPrecisionEQAudioProcessorEditor(HighPre
         enableAttachments[i + 2] = std::make_unique<ButtonAttachment>(processorRef.apvts, "bell_enable_" + juce::String(i + 1), enableButtons[i + 2]);
     }
     diffAttachment = std::make_unique<ButtonAttachment>(processorRef.apvts, "listenDiff", diffButton);
+    holdAttachment = std::make_unique<ButtonAttachment>(processorRef.apvts, "analyzer_hold", holdButton);
     bypassAttachment = std::make_unique<ButtonAttachment>(processorRef.apvts, "bypass", bypassButton);
 
     // Analyze ボタン
@@ -100,6 +101,11 @@ HighPrecisionEQAudioProcessorEditor::HighPrecisionEQAudioProcessorEditor(HighPre
     diffButton.setColour(juce::TextButton::textColourOffId, juce::Colour(0xffe0e0e0));
     diffButton.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xaa00ccff));
     diffButton.setClickingTogglesState(true);
+
+    holdButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff2a2a4e));
+    holdButton.setColour(juce::TextButton::textColourOffId, juce::Colour(0xffe0e0e0));
+    holdButton.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xffffaa00));
+    holdButton.setClickingTogglesState(true);
 
     bypassButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff2a2a4e));
     bypassButton.setColour(juce::TextButton::textColourOffId, juce::Colour(0xffe0e0e0));
@@ -138,6 +144,7 @@ HighPrecisionEQAudioProcessorEditor::HighPrecisionEQAudioProcessorEditor(HighPre
 
     addAndMakeVisible(analyzeButton);
     addAndMakeVisible(diffButton);
+    addAndMakeVisible(holdButton);
     addAndMakeVisible(bypassButton);
     addAndMakeVisible(colorButton);
     addAndMakeVisible(cutoffLabel);
@@ -198,7 +205,9 @@ void HighPrecisionEQAudioProcessorEditor::resized()
     headerArea.removeFromRight(10);
     colorButton.setBounds(headerArea.removeFromRight(80).withSizeKeepingCentre(80, 24));
     headerArea.removeFromRight(10);
-    diffButton.setBounds(headerArea.removeFromRight(80).withSizeKeepingCentre(80, 24));
+    holdButton.setBounds(headerArea.removeFromRight(60).withSizeKeepingCentre(60, 24));
+    headerArea.removeFromRight(10);
+    diffButton.setBounds(headerArea.removeFromRight(60).withSizeKeepingCentre(60, 24));
 
     // コントロール行
     auto controlRow = area.removeFromBottom(120);
@@ -383,10 +392,12 @@ void HighPrecisionEQAudioProcessorEditor::updateComponentColors()
     
     analyzeButton.setColour(juce::TextButton::textColourOffId, pal.text);
     diffButton.setColour(juce::TextButton::textColourOffId, pal.text);
+    holdButton.setColour(juce::TextButton::textColourOffId, pal.text);
     bypassButton.setColour(juce::TextButton::textColourOffId, pal.text);
     colorButton.setColour(juce::TextButton::textColourOffId, pal.text);
     
     diffButton.setColour(juce::TextButton::buttonOnColourId, pal.bell1.withAlpha(0.6f));
+    holdButton.setColour(juce::TextButton::buttonOnColourId, pal.bell2.withAlpha(0.6f));
 }
 
 void HighPrecisionEQAudioProcessorEditor::updateGraph()

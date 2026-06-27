@@ -53,6 +53,9 @@ public:
     }
 
     void mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) override;
+    void mouseMove(const juce::MouseEvent& event) override;
+    void mouseEnter(const juce::MouseEvent& event) override;
+    void mouseExit(const juce::MouseEvent& event) override;
 
 private:
     AnalyzerDSP* analyzer = nullptr;
@@ -61,6 +64,11 @@ private:
 
     int activeDragBand = -1; // -1:なし, 0:LowCut, 1:HighCut, 2..5:Bell1..4
     int selectedBandIdx = 0;
+
+    bool isHovering = false;
+    juce::String hoverText;
+    int mouseX = -1;
+    int mouseY = -1;
 
     std::unique_ptr<juce::VBlankAttachment> vblankAttachment;
     void vblankUpdate();

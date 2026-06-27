@@ -19,7 +19,9 @@ public:
     void prepare(double sampleRate);
     void pushAudio(const float* data, int numSamples);
     std::vector<float> getEnergies(); // Returns dB values for GUI
+    std::vector<float> getHoldEnergies(); // Returns peak hold dB values for GUI
     uint64_t getUpdateCount() const noexcept { return updateCount.load(std::memory_order_acquire); }
+    void setHold(bool shouldHold);
 
     void run() override;
 
@@ -65,6 +67,8 @@ private:
 
     std::vector<AnalyzerBand> bands;
     std::unique_ptr<std::atomic<float>[]> peaks;
+    std::unique_ptr<std::atomic<float>[]> holdPeaks;
+    std::atomic<bool> holdEnabled{ false };
 
     static constexpr int BufferSize = 131072;
     static constexpr int BufferMask = 131071;

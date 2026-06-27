@@ -318,7 +318,7 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
         const int numBands = AnalyzerDSP::NumBands;
 
         // ハイブリッド補間 (1-200Hzは線形、200Hz-25kHzは対数)
-        auto getInterpolatedDb = [&](double f) -> float
+        auto getInterpolatedDb = [&](double f, const std::vector<float>& srcEnergies) -> float
         {
             double idx = 0.0;
             if (f <= 1.0)
@@ -348,32 +348,40 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
             int idx1 = std::clamp(idx0 + 1, 0, numBands - 1);
             double frac = clampedIdx - idx0;
             
-            return energies[static_cast<size_t>(idx0)] * (1.0f - static_cast<float>(frac)) 
-                 + energies[static_cast<size_t>(idx1)] * static_cast<float>(frac);
+            return srcEnergies[static_cast<size_t>(idx0)] * (1.0f - static_cast<float>(frac)) 
+                 + srcEnergies[static_cast<size_t>(idx1)] * static_cast<float>(frac);
         };
 
         juce::Path analyzerPath;
         juce::Path strokePath;
+        juce::Path holdPath;
         bool started = false;
         
+        std::vector<float> holdEnergies = analyzer->getHoldEnergies();
+
         for (int i = 0; i < w; ++i)
         {
             float f = xToLogF(static_cast<float>(i));
-            float magDb = getInterpolatedDb(f);
+            float magDb = getInterpolatedDb(f, energies);
+            float holdDb = getInterpolatedDb(f, holdEnergies);
             float y = analyzerGainToY(magDb);
+            float holdY = analyzerGainToY(holdDb);
             y = std::clamp(y, 0.0f, static_cast<float>(h));
+            holdY = std::clamp(holdY, 0.0f, static_cast<float>(h));
             
             if (!started)
             {
                 analyzerPath.startNewSubPath(static_cast<float>(i), static_cast<float>(h));
                 analyzerPath.lineTo(static_cast<float>(i), y);
                 strokePath.startNewSubPath(static_cast<float>(i), y);
+                holdPath.startNewSubPath(static_cast<float>(i), holdY);
                 started = true;
             }
             else
             {
                 analyzerPath.lineTo(static_cast<float>(i), y);
                 strokePath.lineTo(static_cast<float>(i), y);
+                holdPath.lineTo(static_cast<float>(i), holdY);
             }
         }
 
@@ -389,6 +397,10 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
             
             g.setColour(pal.anaStroke);
             g.strokePath(strokePath, juce::PathStrokeType(1.2f));
+
+            // Peak Hold描画 (少し明るめのアクセントカラーで細い線)
+            g.setColour(pal.bell2.withAlpha(0.8f));
+            g.strokePath(holdPath, juce::PathStrokeType(1.0f));
         }
     }
 
@@ -907,4 +919,50 @@ void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::
 
 void FreqResponseDisplay::modifierKeysChanged(const juce::ModifierKeys&)
 {
+}
+
+void FreqResponseDisplay::mouseEnter(const juce::MouseEvent&)
+{
+    isHovering = true;
+    repaint();
+}
+
+void FreqResponseDisplay::mouseExit(const juce::MouseEvent&)
+{
+    isHovering = false;
+    hoverText.clear();
+    repaint();
+}
+
+void FreqResponseDisplay::mouseMove(const juce::MouseEvent& e)
+{
+    mouseX = e.x;
+    mouseY = e.y;
+    
+    if (mouseX >= 0 && mouseX < getWidth() && mouseY >= 0 && mouseY < getHeight())
+    {
+        isHovering = true;
+        float f = xToLogF(static_cast<float>(mouseX));
+        
+        // MIDI Note calculation
+        int midiNote = static_cast<int>(std::round(12.0 * std::log2(f / 440.0) + 69.0));
+        juce::String noteName = "";
+        
+        if (midiNote >= 0 && midiNote <= 127)
+        {
+            const char* noteNames[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+            int octave = (midiNote / 12) - 1;
+            int noteIdx = midiNote % 12;
+            noteName = juce::String(noteNames[noteIdx]) + juce::String(octave);
+        }
+        
+        hoverText = juce::String(f, 1) + " Hz / " + noteName;
+    }
+    else
+    {
+        isHovering = false;
+        hoverText.clear();
+    }
+    
+    repaint();
 }
