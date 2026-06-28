@@ -307,6 +307,11 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
         g.setColour(juce::Colour(0xff555570));
         g.setFont(juce::Font(juce::FontOptions("Outfit", 9.0f, juce::Font::plain)));
         g.drawText(juce::String(db, 1) + " dB", 5, static_cast<int>(y) - 12, 50, 12, juce::Justification::left);
+        
+        // 右側のアナライザー音量メモリを描画 (左側の目盛りに現在のオフセット分を引いたもの)
+        float db_ana = db - analyzerGainOffsetDb;
+        g.drawText(juce::String(db_ana, 1) + " dB", static_cast<int>(w) - 55, static_cast<int>(y) - 12, 50, 12, juce::Justification::right);
+        
         g.setColour(juce::Colour(0xff222230));
     }
 
@@ -317,7 +322,7 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
         
         const int numBands = AnalyzerDSP::NumBands;
 
-        // ハイブリッド補間 (1-200Hzは線形、200Hz-25kHzは対数)
+        // ハイブリッド補間 (1-60Hzは0.2Hz線形、60-200Hzは1Hz線形、200Hz-25kHzは対数)
         auto getInterpolatedDb = [&](double f, const std::vector<float>& srcEnergies) -> float
         {
             double idx = 0.0;
@@ -325,14 +330,19 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
             {
                 idx = 0.0;
             }
+            else if (f < 60.0)
+            {
+                // 1.0Hz〜60.0Hz (0.2Hzステップ, バンド0-295)
+                idx = (f - 1.0) / 0.2;
+            }
             else if (f < 200.0)
             {
-                // 1Hz〜200Hz (線形等間隔, バンド0-199)
-                idx = f - 1.0;
+                // 60.0Hz〜200.0Hz (1.0Hzステップ, バンド295-435)
+                idx = 295.0 + (f - 60.0);
             }
             else
             {
-                // 200Hz〜25000Hz (対数等間隔, バンド200-479)
+                // 200Hz〜25000Hz (対数等間隔, バンド435〜numBands-1)
                 double logF = std::log(f);
                 double log200 = std::log(200.0);
                 double log25000 = std::log(std::min(25000.0, currentSampleRate * 0.45));
@@ -340,7 +350,7 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
                 if (log25000 <= log200) log25000 = log200 + 1.0;
                 
                 double ratio = (logF - log200) / (log25000 - log200);
-                idx = 199.0 + ratio * 280.0;
+                idx = 435.0 + ratio * (numBands - 1 - 435);
             }
             
             double clampedIdx = std::clamp(idx, 0.0, static_cast<double>(numBands - 1));
@@ -725,6 +735,13 @@ void FreqResponseDisplay::mouseDrag(const juce::MouseEvent& e)
     my = std::clamp(my, 0.0f, static_cast<float>(getHeight()));
 
     float dragFreq = xToLogF(mx);
+
+    // ズームイン表示中かつ60Hz以下のとき、0.2Hz刻みにスナップ
+    if (currentMaxF / currentMinF < 10.0f && dragFreq <= 60.0f)
+    {
+        dragFreq = std::round(dragFreq / 0.2f) * 0.2f;
+    }
+
     float dragGain = yToGain(my);
 
     if (processor != nullptr && activeDragBand != -1)

@@ -11,7 +11,7 @@
 class AnalyzerDSP : public juce::Thread
 {
 public:
-    static constexpr int NumBands = 480;
+    static constexpr int NumBands = 800;
 
     AnalyzerDSP();
     ~AnalyzerDSP() override;

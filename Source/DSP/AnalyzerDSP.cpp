@@ -38,12 +38,12 @@ void AnalyzerDSP::prepare(double newSampleRate)
     decimationAccumulator = 0.0;
     decimationCounter = 0;
     
-    // 1. 低域フィルタバンク (1-200Hz, 1Hzステップ) -> デシメーション信号で処理
-    for (int i = 0; i < 200; ++i)
+    // 1. 低域フィルタバンク (1-200Hz) -> デシメーション信号で処理
+    // - 1.0Hz 〜 60.0Hz まで 0.2Hzステップ: 296バンド (インデックス 0 〜 295)
+    for (int i = 0; i < 296; ++i)
     {
-        double fc = 1.0 + i;
-        // 低域ではQ値は周波数に比例させる（下限2.0、上限24.0）
-        double Q = std::clamp(fc / 8.0, 2.0, 24.0);
+        double fc = 1.0 + i * 0.2;
+        double Q = std::clamp(fc / 4.0, 4.0, 24.0);
         
         bands[static_cast<size_t>(i)].updateCoeffs(fc, Q, lowSampleRate);
         bands[static_cast<size_t>(i)].ic1eq = 0.0;
@@ -51,14 +51,26 @@ void AnalyzerDSP::prepare(double newSampleRate)
         bands[static_cast<size_t>(i)].env = 0.0;
     }
 
-    // 2. 中高域フィルタバンク (200Hz-25kHz) -> フルレート信号で処理
+    // - 61.0Hz 〜 200.0Hz まで 1.0Hzステップ: 140バンド (インデックス 296 〜 435)
+    for (int i = 296; i < 436; ++i)
+    {
+        double fc = 61.0 + (i - 296) * 1.0;
+        double Q = std::clamp(fc / 4.0, 4.0, 24.0);
+        
+        bands[static_cast<size_t>(i)].updateCoeffs(fc, Q, lowSampleRate);
+        bands[static_cast<size_t>(i)].ic1eq = 0.0;
+        bands[static_cast<size_t>(i)].ic2eq = 0.0;
+        bands[static_cast<size_t>(i)].env = 0.0;
+    }
+
+    // 2. 中高域フィルタバンク (200Hz-25kHz) -> フルレート信号で処理 (インデックス 436 〜 NumBands-1)
     double fmin_high = 200.0;
     double fmax_high = std::min(25000.0, sampleRate * 0.45);
     double Q_high = 24.0;
     
-    for (int i = 200; i < NumBands; ++i)
+    for (int i = 436; i < NumBands; ++i)
     {
-        double proportion = static_cast<double>(i - 200) / (NumBands - 1 - 200);
+        double proportion = static_cast<double>(i - 436) / (NumBands - 1 - 436);
         double fc = fmin_high * std::pow(fmax_high / fmin_high, proportion);
         
         bands[static_cast<size_t>(i)].updateCoeffs(fc, Q_high, sampleRate);
@@ -133,7 +145,7 @@ void AnalyzerDSP::processInternal(const float* data, int numSamples)
         double x = static_cast<double>(data[i]);
         
         // 1. 中高域フィルタ (200Hz-25kHz) の処理 (フルサンプルレート)
-        for (int b = 200; b < NumBands; ++b)
+        for (int b = 436; b < NumBands; ++b)
         {
             double bp = bands[static_cast<size_t>(b)].process(x);
             double absVal = std::abs(bp);
@@ -158,7 +170,7 @@ void AnalyzerDSP::processInternal(const float* data, int numSamples)
             decimationCounter = 0;
             
             // 3. 低域フィルタ (1-200Hz) の処理 (ダウンサンプルレート)
-            for (int b = 0; b < 200; ++b)
+            for (int b = 0; b < 436; ++b)
             {
                 double bp = bands[static_cast<size_t>(b)].process(x_low);
                 double absVal = std::abs(bp);
