@@ -108,16 +108,33 @@ public:
                     double c = c_sqrt * c_sqrt;
                     double D_val = c_sqrt;
                     
-                    double u = std::sqrt(G);
-                    double B = u * (W*W + c) * delta_w / (W * D_val);
-                    
-                    double a0_bq = 1.0 + B + c;
-                    a1 = -2.0 * std::cos(wc) * (1.0 + c) / a0_bq;
-                    a2 = (1.0 - B + c) / a0_bq;
-                    
-                    b0 = (G0 + G * B + G0 * c) / a0_bq;
-                    b1 = -2.0 * std::cos(wc) * (G0 + G0 * c) / a0_bq;
-                    b2 = (G0 - G * B + G0 * c) / a0_bq;
+                    if (G >= 1.0)
+                    {
+                        double u = std::sqrt(G);
+                        double B = (W*W + c) * delta_w / (u * W * c_sqrt);
+                        
+                        double a0_bq = 1.0 + B + c;
+                        a1 = -2.0 * std::cos(wc) * (1.0 + c) / a0_bq;
+                        a2 = (1.0 - B + c) / a0_bq;
+                        
+                        b0 = (1.0 + G * B + c) / a0_bq;
+                        b1 = -2.0 * std::cos(wc) * (1.0 + c) / a0_bq;
+                        b2 = (1.0 - G * B + c) / a0_bq;
+                    }
+                    else
+                    {
+                        double G_inv = 1.0 / G;
+                        double u = std::sqrt(G_inv);
+                        double B = (W*W + c) * delta_w / (u * W * c_sqrt);
+                        
+                        double a0_bq = 1.0 + G_inv * B + c;
+                        a1 = -2.0 * std::cos(wc) * (1.0 + c) / a0_bq;
+                        a2 = (1.0 - G_inv * B + c) / a0_bq;
+                        
+                        b0 = (1.0 + B + c) / a0_bq;
+                        b1 = -2.0 * std::cos(wc) * (1.0 + c) / a0_bq;
+                        b2 = (1.0 - B + c) / a0_bq;
+                    }
                 }
             }
         }

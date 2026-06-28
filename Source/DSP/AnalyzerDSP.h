@@ -49,10 +49,10 @@ private:
             h = 1.0 / (1.0 + 2.0 * R * g + g * g);
 
             // 動的時定数の計算 (周期 T = 1 / fc に基づく)
-            // アタック時間は周期の 0.5倍 (最小 10ms), リリース時間は周期の 4.0倍 (最小 150ms)
+            // アタック時間は周期の 0.2倍 (最小 10ms), リリース時間は周期の 2.0倍 (最小 150ms)
             double period = 1.0 / std::max(1.0, fc);
-            double attackTime = std::max(0.010, period * 0.5);
-            double releaseTime = std::max(0.150, period * 4.0);
+            double attackTime = std::max(0.010, period * 0.2);
+            double releaseTime = std::max(0.150, period * 2.0);
 
             attackCoef = std::exp(-1.0 / (attackTime * sr));
             releaseCoef = std::exp(-1.0 / (releaseTime * sr));
