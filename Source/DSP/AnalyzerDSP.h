@@ -36,6 +36,8 @@ private:
         double ic1eq = 0.0;
         double ic2eq = 0.0;
         double env = 0.0;
+        double attackCoef = 0.0;
+        double releaseCoef = 0.0;
 
         void updateCoeffs(double fc, double Q, double sr)
         {
@@ -45,6 +47,15 @@ private:
             g = wa * T / 2.0;
             R = 1.0 / (2.0 * Q);
             h = 1.0 / (1.0 + 2.0 * R * g + g * g);
+
+            // 動的時定数の計算 (周期 T = 1 / fc に基づく)
+            // アタック時間は周期の 0.5倍 (最小 10ms), リリース時間は周期の 4.0倍 (最小 150ms)
+            double period = 1.0 / std::max(1.0, fc);
+            double attackTime = std::max(0.010, period * 0.5);
+            double releaseTime = std::max(0.150, period * 4.0);
+
+            attackCoef = std::exp(-1.0 / (attackTime * sr));
+            releaseCoef = std::exp(-1.0 / (releaseTime * sr));
         }
 
         double process(double x)
@@ -78,15 +89,11 @@ private:
     int readPos{ 0 };
 
     double sampleRate = 44100.0;
-    double attackCoef = 0.0;
-    double releaseCoef = 0.0;
 
     int decimationRatio = 64;
     double lowSampleRate = 44100.0 / 64.0;
     double decimationAccumulator = 0.0;
     int decimationCounter = 0;
-    double attackCoefLow = 0.0;
-    double releaseCoefLow = 0.0;
 
     std::atomic<uint64_t> updateCount{ 0 };
 };

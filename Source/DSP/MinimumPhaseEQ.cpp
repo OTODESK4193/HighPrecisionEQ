@@ -160,12 +160,16 @@ void MinimumPhaseEQ::updateParameters(double lowCutFreq, int lowCutOrder, bool l
 
     for (size_t i = 0; i < MaxSections; ++i)
     {
-        if (i < activeSections.size())
+        if (i < activeSections.size() && newSections[i].type == activeSections[i].type && newSections[i].active == activeSections[i].active)
         {
             newSections[i].s1[0] = activeSections[i].s1[0];
             newSections[i].s1[1] = activeSections[i].s1[1];
             newSections[i].s2[0] = activeSections[i].s2[0];
             newSections[i].s2[1] = activeSections[i].s2[1];
+        }
+        else
+        {
+            newSections[i].reset();
         }
         pendingSections[i] = newSections[i];
     }

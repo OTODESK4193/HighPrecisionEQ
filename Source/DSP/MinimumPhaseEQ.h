@@ -66,7 +66,8 @@ public:
                 return;
             }
 
-            double f_safe = std::clamp(freq, 1.0, sr * 0.49);
+            double f_min = (type == Type::Bell) ? 10.0 : 1.0;
+            double f_safe = std::clamp(freq, f_min, sr * 0.49);
             double wd = 2.0 * std::numbers::pi * f_safe;
             double T = 1.0 / sr;
             g = std::tan(wd * T / 2.0);
@@ -178,22 +179,21 @@ public:
                 double w = 2.0 * std::numbers::pi * f_eval / sr;
                 
                 double cos_w = std::cos(w);
+                double sin_w = std::sin(w);
                 double cos_2w = std::cos(2.0 * w);
+                double sin_2w = std::sin(2.0 * w);
                 
-                double num_sq = b0*b0 + b1*b1 + b2*b2 + 
-                                2.0 * (b0*b1 + b1*b2) * cos_w + 
-                                2.0 * b0*b2 * cos_2w;
-                                
-                double den_sq = 1.0 + a1*a1 + a2*a2 + 
-                                2.0 * (1.0*a1 + a1*a2) * cos_w + 
-                                2.0 * 1.0*a2 * cos_2w;
-                                
+                double num_real = b0 + b1 * cos_w + b2 * cos_2w;
+                double num_imag = - (b1 * sin_w + b2 * sin_2w);
+                
+                double den_real = 1.0 + a1 * cos_w + a2 * cos_2w;
+                double den_imag = - (a1 * sin_w + a2 * sin_2w);
+                
+                double num_sq = num_real * num_real + num_imag * num_imag;
+                double den_sq = den_real * den_real + den_imag * den_imag;
+                
                 if (den_sq <= 0.0) return 1.0;
-                
-                double val = num_sq / den_sq;
-                if (val < 0.0) val = 0.0;
-                
-                return std::sqrt(val);
+                return std::sqrt(num_sq / den_sq);
             }
 
             return 1.0;

@@ -44,7 +44,7 @@ HighPrecisionEQAudioProcessor::createParameterLayout()
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID{ "bell_freq_" + idSuffix, 1 },
             "Bell " + idSuffix + " Freq",
-            juce::NormalisableRange<float>(1.0f, 25000.0f, 0.1f, 0.3f),
+            juce::NormalisableRange<float>(10.0f, 25000.0f, 0.1f, 0.3f),
             1000.0f * static_cast<float>(i),
             juce::AudioParameterFloatAttributes().withLabel("Hz")
         ));

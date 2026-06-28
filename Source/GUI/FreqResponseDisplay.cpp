@@ -772,7 +772,7 @@ void FreqResponseDisplay::mouseDrag(const juce::MouseEvent& e)
             int idx = activeDragBand - 1; // Bell1..4 (1-indexed suffix: 1..4)
             juce::String idSuffix = juce::String(idx);
             
-            targetFreq = std::clamp(dragFreq, 1.0f, 25000.0f);
+            targetFreq = std::clamp(dragFreq, 10.0f, 25000.0f);
             float targetGain = std::clamp(dragGain, -18.0f, 18.0f);
 
             juce::String freqID = "bell_freq_" + idSuffix;

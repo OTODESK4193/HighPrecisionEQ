@@ -79,12 +79,7 @@ void AnalyzerDSP::prepare(double newSampleRate)
         bands[static_cast<size_t>(i)].env = 0.0;
     }
     
-    // エンベロープフォロワー時定数 (アタック10ms, リリース150ms)
-    attackCoef = std::exp(-1.0 / (0.010 * sampleRate));
-    releaseCoef = std::exp(-1.0 / (0.150 * sampleRate));
-    
-    attackCoefLow = std::exp(-1.0 / (0.010 * lowSampleRate));
-    releaseCoefLow = std::exp(-1.0 / (0.150 * lowSampleRate));
+
 
     writePos.store(0, std::memory_order_relaxed);
     readPos = 0;
@@ -151,10 +146,12 @@ void AnalyzerDSP::processInternal(const float* data, int numSamples)
             double absVal = std::abs(bp);
             
             double currentEnv = bands[static_cast<size_t>(b)].env;
+            double att = bands[static_cast<size_t>(b)].attackCoef;
+            double rel = bands[static_cast<size_t>(b)].releaseCoef;
             if (absVal > currentEnv)
-                currentEnv = attackCoef * currentEnv + (1.0 - attackCoef) * absVal;
+                currentEnv = att * currentEnv + (1.0 - att) * absVal;
             else
-                currentEnv = releaseCoef * currentEnv + (1.0 - releaseCoef) * absVal;
+                currentEnv = rel * currentEnv + (1.0 - rel) * absVal;
                 
             bands[static_cast<size_t>(b)].env = currentEnv;
         }
@@ -176,10 +173,12 @@ void AnalyzerDSP::processInternal(const float* data, int numSamples)
                 double absVal = std::abs(bp);
                 
                 double currentEnv = bands[static_cast<size_t>(b)].env;
+                double att = bands[static_cast<size_t>(b)].attackCoef;
+                double rel = bands[static_cast<size_t>(b)].releaseCoef;
                 if (absVal > currentEnv)
-                    currentEnv = attackCoefLow * currentEnv + (1.0 - attackCoefLow) * absVal;
+                    currentEnv = att * currentEnv + (1.0 - att) * absVal;
                 else
-                    currentEnv = releaseCoefLow * currentEnv + (1.0 - releaseCoefLow) * absVal;
+                    currentEnv = rel * currentEnv + (1.0 - rel) * absVal;
                     
                 bands[static_cast<size_t>(b)].env = currentEnv;
             }
