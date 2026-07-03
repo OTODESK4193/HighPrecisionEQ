@@ -160,7 +160,7 @@ Click the "Color" button to instantly restyle the whole UI. Background, grid and
 
 *   **OS**: Windows 10 / Windows 11 (64-bit only) — **Windows-only plugin**
 *   **CPU**: **AVX2 required** (Intel Haswell 2013+ / AMD Excavator+, due to SIMD optimization)
-*   **Tested hosts (DAWs)**: **Ableton Live 11+ (verified)** / Cubase 12+ / Reaper 6+
+*   **Supported host (DAW)**: **Ableton Live 11+ only** (tested and verified). Other VST3 hosts may work but are not tested or supported.
 *   **Formats**: VST3 / Standalone
 *   **Filter design**:
     *   Cuts: Butterworth cascades built on TPT (Topology-Preserving Transform) SVFs, with a hybrid Q arrangement for reduced ringing

@@ -71,7 +71,7 @@ Click the **Color** button in the header to cycle through 10 carefully curated v
 - **CPU**: **AVX2 support required** (Intel Haswell 2013+ / AMD Excavator+)
 - **Format**: VST3
 - **Latency**: 0 samples (no PDC required)
-- **Tested Host**: **Ableton Live 11+ (Fully tested and verified)** / Cubase 12+ / Reaper 6+
+- **Supported Host**: **Ableton Live 11+ only (fully tested and verified)**. Other VST3 hosts may work but are not tested or supported.
 ---
 ## Disclaimer (Ear & Speaker Protection)
 **IMPORTANT WARNING**: This plugin contains specialized audio features such as "Listen Diff" and "Solo-Sweep". Rapidly sweeping frequencies or adjusting extreme Q values can produce abrupt transients and volume changes. To protect your hearing, ears, speakers, and studio monitors, always ensure you keep your master monitoring volume at a safe level. The developers accept no liability for any damage to equipment or physical injury resulting from the use of this software. Use it at your own risk.

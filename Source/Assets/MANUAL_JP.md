@@ -160,7 +160,7 @@ EQポイントを **`Shift` キーを押しながらクリックまたはドラ�
 
 *   **動作環境**: Windows 10 / Windows 11 (64-bit 専用) ─ **Windows専用プラグインです**
 *   **CPU要件**: **AVX2対応CPU必須**（Intel Haswell (2013) 以降 / AMD Excavator以降。SIMD最適化のため）
-*   **動作確認済みホスト (DAW)**: **Ableton Live 11+ (動作検証・確認済み)** / Cubase 12+ / Reaper 6+
+*   **動作保証ホスト (DAW)**: **Ableton Live 11以降のみ**（動作検証・確認済み）。その他のVST3対応DAWでも動作する可能性はありますが、動作保証・サポートの対象外です。
 *   **プラグインフォーマット**: VST3 / Standalone
 *   **フィルター設計**:
     *   カット: TPT (Topology-Preserving Transform) SVF によるButterworthカスケード＋リンギング低減ハイブリッドQ配置
