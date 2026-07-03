@@ -5,6 +5,24 @@
 #include "PluginEditor.h"
 #include "ColorPalette.h"
 
+namespace
+{
+    // 周波数(Hz)から "123.4 Hz / C4" 形式の表示文字列を生成
+    juce::String makeFreqNoteText(float f)
+    {
+        int midiNote = static_cast<int>(std::round(12.0 * std::log2(f / 440.0) + 69.0));
+        juce::String noteName;
+        if (midiNote >= 0 && midiNote <= 127)
+        {
+            const char* noteNames[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+            int octave = (midiNote / 12) - 1;
+            int noteIdx = midiNote % 12;
+            noteName = juce::String(noteNames[noteIdx]) + juce::String(octave);
+        }
+        return juce::String(f, 1) + " Hz / " + noteName;
+    }
+}
+
 FreqResponseDisplay::FreqResponseDisplay()
 {
     // VBlankでスムーズな描画同期
@@ -747,70 +765,68 @@ void FreqResponseDisplay::drawEQPoints(juce::Graphics& g)
     }
 }
 
+int FreqResponseDisplay::findNearestBand(float mx, float my, float radius, bool includeDisabled) const
+{
+    int best = -1;
+    float bestDist = radius; // radius以内のみ採用
+
+    auto consider = [&](int band, float x, float y)
+    {
+        float d = std::hypot(mx - x, my - y);
+        if (d < bestDist)
+        {
+            bestDist = d;
+            best = band;
+        }
+    };
+
+    // 0: LowCut
+    if (includeDisabled || currentLowcutEnable)
+        consider(0, logFToX(static_cast<float>(currentCutoffHz)), cutPointY(currentCutoffHz));
+
+    // 1: HighCut
+    if (includeDisabled || currentHighCutEnable)
+        consider(1, logFToX(static_cast<float>(currentHighCutFreq)), cutPointY(currentHighCutFreq));
+
+    // 2..5: Bells
+    for (int i = 0; i < 4; ++i)
+    {
+        if (includeDisabled || bellParams[i].active)
+            consider(i + 2,
+                     logFToX(static_cast<float>(bellParams[i].freq)),
+                     gainToY(static_cast<float>(bellParams[i].gain)));
+    }
+
+    return best;
+}
+
 void FreqResponseDisplay::mouseDown(const juce::MouseEvent& e)
 {
     activeDragBand = -1;
     float mx = static_cast<float>(e.x);
     float my = static_cast<float>(e.y);
 
-    // 各ポイントへのクリック判定 (半径15ピクセル以内ならキャッチ)
+    // 有効なポイントのうちカーソルに最も近いものを掴む (半径15px以内)。
+    // 複数ポイントが近接していても意図した点を選べるようにする。
     const float grabRadius = 15.0f;
+    int band = findNearestBand(mx, my, grabRadius, /*includeDisabled=*/false);
 
-    // 1. LowCut
-    if (currentLowcutEnable)
+    if (band != -1)
     {
-        float x = logFToX(static_cast<float>(currentCutoffHz));
-        float y = cutPointY(currentCutoffHz);
-        if (std::hypot(mx - x, my - y) < grabRadius)
-        {
-            activeDragBand = 0;
-            if (editor != nullptr) editor->selectBand(HighPrecisionEQAudioProcessorEditor::SelectedBand::LowCut);
-            if (e.mods.isShiftDown() && processor != nullptr)
-            {
-                processor->setSoloMode(true, static_cast<float>(currentCutoffHz), 2.0f);
-            }
-            repaint();
-            return;
-        }
-    }
+        activeDragBand = band;
+        if (editor != nullptr)
+            editor->selectBand(static_cast<HighPrecisionEQAudioProcessorEditor::SelectedBand>(band));
 
-    // 2. HighCut
-    if (currentHighCutEnable)
-    {
-        float x = logFToX(static_cast<float>(currentHighCutFreq));
-        float y = cutPointY(currentHighCutFreq);
-        if (std::hypot(mx - x, my - y) < grabRadius)
+        if (e.mods.isShiftDown() && processor != nullptr)
         {
-            activeDragBand = 1;
-            if (editor != nullptr) editor->selectBand(HighPrecisionEQAudioProcessorEditor::SelectedBand::HighCut);
-            if (e.mods.isShiftDown() && processor != nullptr)
-            {
-                processor->setSoloMode(true, static_cast<float>(currentHighCutFreq), 2.0f);
-            }
-            repaint();
-            return;
+            float soloFreq = (band == 0) ? static_cast<float>(currentCutoffHz)
+                           : (band == 1) ? static_cast<float>(currentHighCutFreq)
+                                         : static_cast<float>(bellParams[band - 2].freq);
+            float soloQ = (band >= 2) ? std::max(2.0f, static_cast<float>(bellParams[band - 2].q)) : 2.0f;
+            processor->setSoloMode(true, soloFreq, soloQ);
         }
-    }
-
-    // 3. Bells
-    for (int i = 0; i < 4; ++i)
-    {
-        if (bellParams[i].active)
-        {
-            float x = logFToX(static_cast<float>(bellParams[i].freq));
-            float y = gainToY(static_cast<float>(bellParams[i].gain));
-            if (std::hypot(mx - x, my - y) < grabRadius)
-            {
-                activeDragBand = i + 2;
-                if (editor != nullptr) editor->selectBand(static_cast<HighPrecisionEQAudioProcessorEditor::SelectedBand>(i + 2));
-                if (e.mods.isShiftDown() && processor != nullptr)
-                {
-                    processor->setSoloMode(true, static_cast<float>(bellParams[i].freq), std::max(2.0f, static_cast<float>(bellParams[i].q)));
-                }
-                repaint();
-                return;
-            }
-        }
+        repaint();
+        return;
     }
 
     // どこもクリックされていなければ、X/Yドラッグズームの準備
@@ -829,6 +845,11 @@ void FreqResponseDisplay::mouseDrag(const juce::MouseEvent& e)
     // 画面外へのドラッグ制限
     mx = std::clamp(mx, 0.0f, static_cast<float>(getWidth()));
     my = std::clamp(my, 0.0f, static_cast<float>(getHeight()));
+
+    // ドラッグ中もHz/音名ツールチップをリアルタイム追従させる
+    mouseX = static_cast<int>(mx);
+    mouseY = static_cast<int>(my);
+    isHovering = true;
 
     float dragFreq = xToLogF(mx);
 
@@ -877,6 +898,9 @@ void FreqResponseDisplay::mouseDrag(const juce::MouseEvent& e)
             apvts.getParameter(gainID)->setValueNotifyingHost(rangeG.convertTo0to1(targetGain));
         }
 
+        // ドラッグ中のポイント周波数をツールチップに反映
+        hoverText = makeFreqNoteText(targetFreq);
+
         // Shiftドラッグ中のSolo更新
         if (e.mods.isShiftDown())
         {
@@ -891,6 +915,8 @@ void FreqResponseDisplay::mouseDrag(const juce::MouseEvent& e)
         {
             processor->setSoloMode(false, 0.0f, 0.0f);
         }
+
+        repaint();
     }
     else
     {
@@ -902,6 +928,9 @@ void FreqResponseDisplay::mouseDrag(const juce::MouseEvent& e)
         float shiftFactor = std::pow(10.0f, -dx / static_cast<float>(getWidth()) * 0.5f);
         currentMinF = std::max(dragStartMinF * shiftFactor, 1.0f); // 1Hzまで
         currentMaxF = std::min(dragStartMaxF * shiftFactor, 24000.0f);
+
+        // 移動後のカーソル位置の周波数をツールチップに反映
+        hoverText = makeFreqNoteText(xToLogF(mx));
 
         pathNeedsRecalculation = true;
         repaint();
@@ -925,46 +954,10 @@ void FreqResponseDisplay::mouseDoubleClick(const juce::MouseEvent& e)
     float mx = static_cast<float>(e.x);
     float my = static_cast<float>(e.y);
     const float grabRadius = 15.0f;
-    int targetBand = -1;
 
-    // ダブルクリックはOn/Offトグル用。Off中の点も表示しているので、
-    // Enable/active に関係なく当たり判定する (Onに戻せるようにするため)。
-
-    // 1. LowCut
-    {
-        float x = logFToX(static_cast<float>(currentCutoffHz));
-        float y = cutPointY(currentCutoffHz);
-        if (std::hypot(mx - x, my - y) < grabRadius)
-        {
-            targetBand = 0;
-        }
-    }
-
-    // 2. HighCut
-    if (targetBand == -1)
-    {
-        float x = logFToX(static_cast<float>(currentHighCutFreq));
-        float y = cutPointY(currentHighCutFreq);
-        if (std::hypot(mx - x, my - y) < grabRadius)
-        {
-            targetBand = 1;
-        }
-    }
-
-    // 3. Bells
-    if (targetBand == -1)
-    {
-        for (int i = 0; i < 4; ++i)
-        {
-            float x = logFToX(static_cast<float>(bellParams[i].freq));
-            float y = gainToY(static_cast<float>(bellParams[i].gain));
-            if (std::hypot(mx - x, my - y) < grabRadius)
-            {
-                targetBand = i + 2;
-                break;
-            }
-        }
-    }
+    // ダブルクリックはOn/Offトグル用。Off中の点も淡色表示しているので、
+    // Enable/active に関係なく、カーソルに最も近い点を選ぶ (Onにも戻せる)。
+    int targetBand = findNearestBand(mx, my, grabRadius, /*includeDisabled=*/true);
 
     if (targetBand != -1)
     {
@@ -1030,51 +1023,11 @@ void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::
     if (processor == nullptr) return;
     auto& apvts = processor->apvts;
 
-    // マウスカーソルがEQポイントの上にあるか判定
+    // カーソルに最も近い有効なEQポイントを対象にする (半径15px以内)
     float mx = static_cast<float>(e.x);
     float my = static_cast<float>(e.y);
     const float grabRadius = 15.0f;
-    int targetBand = -1;
-
-    // 1. LowCut
-    if (currentLowcutEnable)
-    {
-        float x = logFToX(static_cast<float>(currentCutoffHz));
-        float y = cutPointY(currentCutoffHz);
-        if (std::hypot(mx - x, my - y) < grabRadius)
-        {
-            targetBand = 0;
-        }
-    }
-
-    // 2. HighCut
-    if (targetBand == -1 && currentHighCutEnable)
-    {
-        float x = logFToX(static_cast<float>(currentHighCutFreq));
-        float y = cutPointY(currentHighCutFreq);
-        if (std::hypot(mx - x, my - y) < grabRadius)
-        {
-            targetBand = 1;
-        }
-    }
-
-    // 3. Bells
-    if (targetBand == -1)
-    {
-        for (int i = 0; i < 4; ++i)
-        {
-            if (bellParams[i].active)
-            {
-                float x = logFToX(static_cast<float>(bellParams[i].freq));
-                float y = gainToY(static_cast<float>(bellParams[i].gain));
-                if (std::hypot(mx - x, my - y) < grabRadius)
-                {
-                    targetBand = i + 2;
-                    break;
-                }
-            }
-        }
-    }
+    int targetBand = findNearestBand(mx, my, grabRadius, /*includeDisabled=*/false);
 
     // どのEQポイントの上でもない場合は、EQカーブを左右に移動する (上下操作は廃止)
     if (targetBand == -1)
@@ -1163,20 +1116,7 @@ void FreqResponseDisplay::mouseMove(const juce::MouseEvent& e)
     {
         isHovering = true;
         float f = xToLogF(static_cast<float>(mouseX));
-        
-        // MIDI Note calculation
-        int midiNote = static_cast<int>(std::round(12.0 * std::log2(f / 440.0) + 69.0));
-        juce::String noteName = "";
-        
-        if (midiNote >= 0 && midiNote <= 127)
-        {
-            const char* noteNames[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-            int octave = (midiNote / 12) - 1;
-            int noteIdx = midiNote % 12;
-            noteName = juce::String(noteNames[noteIdx]) + juce::String(octave);
-        }
-        
-        hoverText = juce::String(f, 1) + " Hz / " + noteName;
+        hoverText = makeFreqNoteText(f);
     }
     else
     {

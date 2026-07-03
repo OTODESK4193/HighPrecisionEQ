@@ -143,6 +143,23 @@ void AnalyzerDSP::run()
 
             processInternal(localBuf.data(), available);
         }
+        else
+        {
+            // 新規オーディオが無い間 (トランスポート停止・オートサスペンド時) も
+            // エンベロープを無音入力で減衰させ、残留表示 (特に低域) を自然にフェードさせる。
+            // まだ表示フロアより上のバンドが残っている場合のみ処理し、
+            // 完全に減衰したら無駄な更新を止める。
+            double maxEnv = 0.0;
+            for (const auto& b : bands)
+                maxEnv = std::max(maxEnv, b.env);
+
+            if (maxEnv > 1e-5) // ≈ -100dB。これ以下は表示上フロアに張り付き見えない
+            {
+                int silentSamples = std::max(1, static_cast<int>(sampleRate * 0.005)); // ≒5ms分
+                localBuf.assign(static_cast<size_t>(silentSamples), 0.0f);
+                processInternal(localBuf.data(), silentSamples);
+            }
+        }
     }
 }
 

@@ -117,9 +117,9 @@ Turning "Hold" on keeps the maximum level of every band displayed as a thin line
 
 | Action | Result |
 | :--- | :--- |
-| **Drag** | Changes frequency (and gain, vertically, for bells). LC/HC points sit on the actual curve (at the ~-3 dB point of the cutoff). |
+| **Drag (on a point)** | Changes frequency (and gain, vertically, for bells). LC/HC points sit on the actual curve (at the ~-3 dB point of the cutoff). While dragging, the frequency and note name update in the tooltip in real time. |
 | **Mouse wheel (over a point)** | Adjusts **Q** on bells, or **Slope** on LC/HC. |
-| **Double-click (on a point)** | Instantly toggles that band on/off. |
+| **Double-click (on a point)** | Instantly toggles that band on/off. **Disabled points remain visible as dimmed "ghost" markers**, so a second double-click turns the band back on. |
 | **`Shift` + click/drag** | Solo-Sweep (see above). |
 
 ### Display Zoom / Navigation
@@ -128,12 +128,11 @@ Turning "Hold" on keeps the maximum level of every band displayed as a thin line
 | :--- | :--- |
 | **H+ / H− buttons** | Zoom the frequency axis in/out. |
 | **V+ / V− buttons** | Zoom the gain axis in/out (±3 dB to ±48 dB). |
-| **`Ctrl` + mouse wheel** | Zooms the frequency axis **centered on the cursor** — ideal for inspecting the sub region. |
-| **Right-drag** | Horizontal = frequency zoom, vertical = gain zoom. |
-| **Left-drag (empty space)** | Horizontal = pan the view, vertical = shift the analyzer reference level. |
-| **Mouse wheel (empty space)** | Shifts the analyzer reference level (±40 dB). |
-| **Double-click (empty space)** | Resets zoom and display offsets. |
-| **Hover** | Shows frequency and note name at the cursor (e.g. `55.0 Hz / A1`). |
+| **`Ctrl` + mouse wheel** | Zooms (in/out) the frequency axis **centered on the cursor** — ideal for inspecting the sub region. |
+| **Left/right drag (empty space)** | Moves the EQ curve (view) **left/right only**. There is no vertical action. |
+| **Mouse wheel (empty space)** | Moves the EQ curve (view) **left/right**. It follows the cursor whether zoomed in or at normal scale. |
+| **Double-click (empty space)** | Resets zoom and view range. |
+| **Hover / while dragging** | Shows frequency (the active frequency while dragging) and note name in real time (e.g. `55.0 Hz / A1`). |
 
 > **Tip**: When zoomed in far, dragging a point below 60 Hz snaps the frequency to a 0.2 Hz grid for precise sub-bass work. You can zoom all the way down to 1 Hz.
 

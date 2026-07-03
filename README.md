@@ -31,7 +31,7 @@ LowCut Police is not a generic, all-purpose equalizer. Instead, it is a highly s
 - **Alias-Free Decimation**: Each multirate stage is preceded by an 8th-order Butterworth anti-aliasing filter (alias rejection better than -110 dB), so mid-band content never appears as false sub-bass spectrum.
 - **Calibrated Display**: A 0 dBFS sine reads 0 dB, within ±0.25 dB across the entire range.
 - **Peak Hold**: Capture momentary low-end peaks and resonances over a full song pass with the **Hold** button.
-- **Deep Zoom**: Zoom the frequency axis down to 1 Hz (H+/H− buttons, Ctrl+wheel, right-drag). Below 60 Hz, point dragging snaps to a 0.2 Hz grid for precise sub-bass work.
+- **Deep Zoom**: Zoom the frequency axis down to 1 Hz (H+/H− buttons or Ctrl+wheel). Pan left/right by dragging or scrolling on empty space. Below 60 Hz, point dragging snaps to a 0.2 Hz grid for precise sub-bass work.
 
 ### 🎛️ Surgical Equalization & Shaping
 - **High-Pass Filter (LowCut)**: Cutoff frequency from 1 Hz to 500 Hz (logarithmic scale) with slope selections of 12, 24, 36, 48, 60, 72, 84, and 96 dB/oct.
@@ -55,7 +55,7 @@ Click the **Color** button in the header to cycle through 10 carefully curated v
 ### 🎧 Precision Monitoring Tools
 - **Listen Diff**: Outputs the difference signal ($Dry - Wet$). Listen only to what the plugin is removing/boosting — sample-accurate thanks to zero latency.
 - **Solo-Sweep (Shift + Click/Drag)**: Shift-drag any EQ point to temporarily apply a narrow bandpass solo filter around the target band.
-- **Interactive Graphs**: Drag EQ points directly on the screen. Auto-switching knobs update to match the selected band. Hover shows frequency and musical note name (e.g. `55.0 Hz / A1`).
+- **Interactive Graphs**: Drag EQ points directly on the screen. Auto-switching knobs update to match the selected band. Hovering — or dragging a point — shows the frequency and musical note name in real time (e.g. `55.0 Hz / A1`).
 - **Display Modes**: Cycle the **Analyze** button through EQ curve + analyzer / waveform (Dry–Wet) / phase response views.
 
 ### 🛡️ Realtime-Safe Engineering (Zero Runtime Allocation)
@@ -91,12 +91,12 @@ Comprehensive user manuals with full technical breakdowns and shortcuts are avai
 | Shortcut | Action |
 | :--- | :--- |
 | **Mousewheel on EQ Point** | Directly adjust **Q-factor** (Bell bands) or **Slope** (LowCut / HighCut) |
-| **Double-Click EQ Point** | Toggle bypass state for the corresponding band |
+| **Double-Click EQ Point** | Toggle the band **on/off**. Disabled points stay visible as dimmed "ghost" markers, so you can double-click again to turn them back on |
 | **Shift + Click / Drag** | Activate **Solo-Sweep** (bandpass solo monitor) |
-| **Ctrl + Mousewheel** | Zoom the frequency axis centered on the cursor (down to 1 Hz) |
-| **Right-Drag** | Zoom (horizontal = frequency axis, vertical = gain axis) |
-| **Left-Drag on Empty Space** | Pan the view / shift the analyzer reference level |
-| **Double-Click Empty Space** | Reset zoom and display offsets |
+| **Ctrl + Mousewheel** | Zoom in/out on the frequency axis, centered on the cursor (down to 1 Hz) |
+| **Mousewheel on Empty Space** | Move the EQ curve (view) **left/right** — follows the cursor at any zoom level |
+| **Left/Right Drag on Empty Space** | Move the EQ curve (view) **left/right only** (no vertical action) |
+| **Double-Click Empty Space** | Reset zoom and view range |
 ---
 ## License
 Licensed under the GNU Affero General Public License v3.0 (AGPLv3) - see the [LICENSE](LICENSE) file for details. Built using the **JUCE 8** framework.

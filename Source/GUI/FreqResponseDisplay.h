@@ -110,6 +110,11 @@ private:
 
     void drawEQPoints(juce::Graphics& g);
 
+    // (mx,my) から半径 radius 以内で最も近いEQポイントのバンド番号を返す (なければ-1)。
+    // includeDisabled=false なら有効なバンドのみ対象 (ドラッグ/ホイール用)、
+    // true なら無効(Off)なバンドも対象 (ダブルクリックのOn/Offトグル用)。
+    int findNearestBand(float mx, float my, float radius, bool includeDisabled) const;
+
     void mouseDown(const juce::MouseEvent& e) override;
     void mouseDrag(const juce::MouseEvent& e) override;
     void mouseUp(const juce::MouseEvent& e) override;
