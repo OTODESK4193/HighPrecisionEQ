@@ -58,7 +58,11 @@ HighPrecisionEQAudioProcessorEditor::HighPrecisionEQAudioProcessorEditor(HighPre
         addAndMakeVisible(bandButtons[i]);
         
         enableButtons[i].setClickingTogglesState(true);
-        enableButtons[i].onStateChange = [this]() { updateComponentColors(); };
+        // onStateChange はユーザークリックだけでなく、グラフのダブルクリックや
+        // ホストオートメーション等によるパラメータ変更でも発火する。ここで updateGraph も
+        // 呼ぶことで、有効/無効状態が表示 (bellParams.active 等) に確実に反映される。
+        // (グラフのダブルクリックでOnにしたバンドが掴めない不具合の対策)
+        enableButtons[i].onStateChange = [this]() { updateComponentColors(); updateGraph(); };
         addAndMakeVisible(enableButtons[i]);
     }
 
@@ -68,8 +72,8 @@ HighPrecisionEQAudioProcessorEditor::HighPrecisionEQAudioProcessorEditor(HighPre
     qSlider.onValueChange = [this]() { updateGraph(); };
     slopeSlider.onValueChange = [this]() { updateGraph(); };
 
-    for (int i = 0; i < 6; ++i)
-        enableButtons[i].onClick = [this]() { updateGraph(); };
+    // enableButtons の updateGraph 呼び出しは onStateChange 側に集約済み
+    // (プログラム的な変更にも追従させるため。onClick では手動クリックしか拾えない)
 
     // アタッチメント作成 (ボタン関係)
     enableAttachments[0] = std::make_unique<ButtonAttachment>(processorRef.apvts, "lowcut_enable", enableButtons[0]);

@@ -765,7 +765,8 @@ void FreqResponseDisplay::drawEQPoints(juce::Graphics& g)
     }
 }
 
-int FreqResponseDisplay::findNearestBand(float mx, float my, float radius, bool includeDisabled) const
+int FreqResponseDisplay::findNearestBand(float mx, float my, float radius, bool includeDisabled,
+                                         int preferredBand, float preferredExtra) const
 {
     int best = -1;
     float bestDist = radius; // radius以内のみ採用
@@ -773,9 +774,16 @@ int FreqResponseDisplay::findNearestBand(float mx, float my, float radius, bool 
     auto consider = [&](int band, float x, float y)
     {
         float d = std::hypot(mx - x, my - y);
-        if (d < bestDist)
+        float limit = radius;
+        float eff = d;
+        if (band == preferredBand) // 選択中バンドは掴みやすく優遇
         {
-            bestDist = d;
+            limit = radius + preferredExtra;
+            eff = std::max(0.0f, d - preferredExtra);
+        }
+        if (d < limit && eff < bestDist)
+        {
+            bestDist = eff;
             best = band;
         }
     };
@@ -807,9 +815,11 @@ void FreqResponseDisplay::mouseDown(const juce::MouseEvent& e)
     float my = static_cast<float>(e.y);
 
     // 有効なポイントのうちカーソルに最も近いものを掴む (半径15px以内)。
-    // 複数ポイントが近接していても意図した点を選べるようにする。
+    // 複数ポイントが近接していても意図した点を選べるよう、現在選択中のバンドは
+    // 判定半径を広げて優先する (選択したのに掴めない問題の対策)。
     const float grabRadius = 15.0f;
-    int band = findNearestBand(mx, my, grabRadius, /*includeDisabled=*/false);
+    int band = findNearestBand(mx, my, grabRadius, /*includeDisabled=*/false,
+                               /*preferredBand=*/selectedBandIdx, /*preferredExtra=*/10.0f);
 
     if (band != -1)
     {
@@ -1088,8 +1098,30 @@ void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::
     }
 }
 
-void FreqResponseDisplay::modifierKeysChanged(const juce::ModifierKeys&)
+void FreqResponseDisplay::modifierKeysChanged(const juce::ModifierKeys& mods)
 {
+    if (processor == nullptr) return;
+
+    // ポイントを掴んでいる最中 (クリック/ドラッグ中) にShiftの押下状態が
+    // 変わったら、Solo-Sweepを追従させる。これにより「先にクリックしてから
+    // Shiftを押す」操作でもSoloが発動する。
+    if (activeDragBand != -1)
+    {
+        if (mods.isShiftDown())
+        {
+            float soloFreq = (activeDragBand == 0) ? static_cast<float>(currentCutoffHz)
+                           : (activeDragBand == 1) ? static_cast<float>(currentHighCutFreq)
+                                                   : static_cast<float>(bellParams[activeDragBand - 2].freq);
+            float soloQ = (activeDragBand >= 2)
+                        ? std::max(2.0f, static_cast<float>(bellParams[activeDragBand - 2].q))
+                        : 2.0f;
+            processor->setSoloMode(true, soloFreq, soloQ);
+        }
+        else
+        {
+            processor->setSoloMode(false, 0.0f, 0.0f);
+        }
+    }
 }
 
 void FreqResponseDisplay::mouseEnter(const juce::MouseEvent&)

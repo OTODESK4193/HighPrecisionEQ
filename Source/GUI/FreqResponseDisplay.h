@@ -113,7 +113,10 @@ private:
     // (mx,my) から半径 radius 以内で最も近いEQポイントのバンド番号を返す (なければ-1)。
     // includeDisabled=false なら有効なバンドのみ対象 (ドラッグ/ホイール用)、
     // true なら無効(Off)なバンドも対象 (ダブルクリックのOn/Offトグル用)。
-    int findNearestBand(float mx, float my, float radius, bool includeDisabled) const;
+    // preferredBand を指定すると、そのバンドは判定半径を preferredExtra 分広げ、
+    // かつ距離を preferredExtra 分優遇する (選択中の点を掴みやすくするため)。
+    int findNearestBand(float mx, float my, float radius, bool includeDisabled,
+                        int preferredBand = -1, float preferredExtra = 0.0f) const;
 
     void mouseDown(const juce::MouseEvent& e) override;
     void mouseDrag(const juce::MouseEvent& e) override;
