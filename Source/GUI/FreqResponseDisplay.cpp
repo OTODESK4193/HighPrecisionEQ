@@ -667,58 +667,83 @@ void FreqResponseDisplay::drawEQPoints(juce::Graphics& g)
     const auto& pal = getPalettes()[static_cast<size_t>(currentPaletteIdx)];
     
     // 各バンドのコントロールポイント座標を計算して描画
-    // 0: LowCut
-    if (currentLowcutEnable)
+    // Off時のゴースト表示用アルファ (ダブルクリックでOnに戻せるよう位置を示す)
+    const float offAlpha = 0.25f;
+
+    // 0: LowCut (Offでも淡色で表示)
     {
         float x = logFToX(static_cast<float>(currentCutoffHz));
         float y = cutPointY(currentCutoffHz);
 
-        g.setColour(selectedBandIdx == 0 ? juce::Colours::white : pal.lowcut);
-        g.fillEllipse(x - 6.0f, y - 6.0f, 12.0f, 12.0f);
-        g.setColour(pal.lowcut.withAlpha(0.4f));
-        g.drawEllipse(x - 9.0f, y - 9.0f, 18.0f, 18.0f, 1.5f);
-        
-        g.setColour(pal.text.withAlpha(0.8f));
+        if (currentLowcutEnable)
+        {
+            g.setColour(selectedBandIdx == 0 ? juce::Colours::white : pal.lowcut);
+            g.fillEllipse(x - 6.0f, y - 6.0f, 12.0f, 12.0f);
+            g.setColour(pal.lowcut.withAlpha(0.4f));
+            g.drawEllipse(x - 9.0f, y - 9.0f, 18.0f, 18.0f, 1.5f);
+            g.setColour(pal.text.withAlpha(0.8f));
+        }
+        else
+        {
+            g.setColour(pal.lowcut.withAlpha(offAlpha));
+            g.drawEllipse(x - 6.0f, y - 6.0f, 12.0f, 12.0f, 1.5f);
+            g.setColour(pal.text.withAlpha(offAlpha));
+        }
+
         g.setFont(juce::Font(juce::FontOptions("Outfit", 9.0f, juce::Font::bold)));
         g.drawText("LC", static_cast<int>(x) - 15, static_cast<int>(y) - 22, 30, 10, juce::Justification::centred);
     }
 
-    // 1: HighCut
-    if (currentHighCutEnable)
+    // 1: HighCut (Offでも淡色で表示)
     {
         float x = logFToX(static_cast<float>(currentHighCutFreq));
         float y = cutPointY(currentHighCutFreq);
 
-        g.setColour(selectedBandIdx == 1 ? juce::Colours::white : pal.highcut);
-        g.fillEllipse(x - 6.0f, y - 6.0f, 12.0f, 12.0f);
-        g.setColour(pal.highcut.withAlpha(0.4f));
-        g.drawEllipse(x - 9.0f, y - 9.0f, 18.0f, 18.0f, 1.5f);
+        if (currentHighCutEnable)
+        {
+            g.setColour(selectedBandIdx == 1 ? juce::Colours::white : pal.highcut);
+            g.fillEllipse(x - 6.0f, y - 6.0f, 12.0f, 12.0f);
+            g.setColour(pal.highcut.withAlpha(0.4f));
+            g.drawEllipse(x - 9.0f, y - 9.0f, 18.0f, 18.0f, 1.5f);
+            g.setColour(pal.text.withAlpha(0.8f));
+        }
+        else
+        {
+            g.setColour(pal.highcut.withAlpha(offAlpha));
+            g.drawEllipse(x - 6.0f, y - 6.0f, 12.0f, 12.0f, 1.5f);
+            g.setColour(pal.text.withAlpha(offAlpha));
+        }
 
-        g.setColour(pal.text.withAlpha(0.8f));
         g.setFont(juce::Font(juce::FontOptions("Outfit", 9.0f, juce::Font::bold)));
         g.drawText("HC", static_cast<int>(x) - 15, static_cast<int>(y) - 22, 30, 10, juce::Justification::centred);
     }
 
-    // 2..5: Bells
+    // 2..5: Bells (Offでも淡色で表示)
     juce::Colour bellColors[4] = { pal.bell1, pal.bell2, pal.bell3, pal.bell4 };
     juce::String bellNames[4] = { "B1", "B2", "B3", "B4" };
-    
+
     for (int i = 0; i < 4; ++i)
     {
+        float x = logFToX(static_cast<float>(bellParams[i].freq));
+        float y = gainToY(static_cast<float>(bellParams[i].gain));
+
         if (bellParams[i].active)
         {
-            float x = logFToX(static_cast<float>(bellParams[i].freq));
-            float y = gainToY(static_cast<float>(bellParams[i].gain));
-
             g.setColour(selectedBandIdx == (i + 2) ? juce::Colours::white : bellColors[i]);
             g.fillEllipse(x - 6.0f, y - 6.0f, 12.0f, 12.0f);
             g.setColour(bellColors[i].withAlpha(0.4f));
             g.drawEllipse(x - 9.0f, y - 9.0f, 18.0f, 18.0f, 1.5f);
-
             g.setColour(pal.text.withAlpha(0.8f));
-            g.setFont(juce::Font(juce::FontOptions("Outfit", 9.0f, juce::Font::bold)));
-            g.drawText(bellNames[i], static_cast<int>(x) - 15, static_cast<int>(y) - 22, 30, 10, juce::Justification::centred);
         }
+        else
+        {
+            g.setColour(bellColors[i].withAlpha(offAlpha));
+            g.drawEllipse(x - 6.0f, y - 6.0f, 12.0f, 12.0f, 1.5f);
+            g.setColour(pal.text.withAlpha(offAlpha));
+        }
+
+        g.setFont(juce::Font(juce::FontOptions("Outfit", 9.0f, juce::Font::bold)));
+        g.drawText(bellNames[i], static_cast<int>(x) - 15, static_cast<int>(y) - 22, 30, 10, juce::Justification::centred);
     }
 }
 
@@ -872,35 +897,12 @@ void FreqResponseDisplay::mouseDrag(const juce::MouseEvent& e)
         // グラフ全体のズーム／シフト操作
         // ドラッグによる対数ピッチシフト
         float dx = static_cast<float>(e.getDistanceFromDragStartX());
-        float dy = static_cast<float>(e.getDistanceFromDragStartY());
 
-        if (e.mods.isRightButtonDown())
-        {
-            // 右ドラッグ: ズーム (X軸: 幅, Y軸: 高さ)
-            float xZoomFactor = std::pow(1.005f, -dx);
-            float centerLog = std::sqrt(dragStartMinF * dragStartMaxF);
-            float ratio = dragStartMaxF / dragStartMinF;
-            float newRatio = std::clamp(ratio * xZoomFactor, 1.002f, 2400.0f); // 最小比率を 1.002f に緩和
-            
-            currentMinF = centerLog / std::sqrt(newRatio);
-            currentMaxF = centerLog * std::sqrt(newRatio);
-            if (currentMinF < 1.0f) currentMinF = 1.0f; // 1Hzまでズーム可
-            if (currentMaxF > 24000.0f) currentMaxF = 24000.0f;
+        // 左ドラッグ: EQカーブの左右移動のみ (上下シフト・右ドラッグズームは廃止)
+        float shiftFactor = std::pow(10.0f, -dx / static_cast<float>(getWidth()) * 0.5f);
+        currentMinF = std::max(dragStartMinF * shiftFactor, 1.0f); // 1Hzまで
+        currentMaxF = std::min(dragStartMaxF * shiftFactor, 24000.0f);
 
-            float yZoomFactor = std::pow(1.005f, -dy);
-            currentMinDb = std::clamp(dragStartMinDb * yZoomFactor, -48.0f, -3.0f);
-            currentMaxDb = -currentMinDb;
-        }
-        else
-        {
-            // 左ドラッグ: シフト移動
-            float shiftFactor = std::pow(10.0f, -dx / static_cast<float>(getWidth()) * 0.5f);
-            currentMinF = std::max(dragStartMinF * shiftFactor, 1.0f); // 1Hzまで
-            currentMaxF = std::min(dragStartMaxF * shiftFactor, 24000.0f);
-            
-            // Y軸シフト (アナライザーの基準オフセットを調整)
-            analyzerGainOffsetDb = std::clamp(analyzerGainOffsetDb - dy * 0.1f, -40.0f, 40.0f);
-        }
         pathNeedsRecalculation = true;
         repaint();
     }
@@ -925,8 +927,10 @@ void FreqResponseDisplay::mouseDoubleClick(const juce::MouseEvent& e)
     const float grabRadius = 15.0f;
     int targetBand = -1;
 
+    // ダブルクリックはOn/Offトグル用。Off中の点も表示しているので、
+    // Enable/active に関係なく当たり判定する (Onに戻せるようにするため)。
+
     // 1. LowCut
-    if (currentLowcutEnable)
     {
         float x = logFToX(static_cast<float>(currentCutoffHz));
         float y = cutPointY(currentCutoffHz);
@@ -937,7 +941,7 @@ void FreqResponseDisplay::mouseDoubleClick(const juce::MouseEvent& e)
     }
 
     // 2. HighCut
-    if (targetBand == -1 && currentHighCutEnable)
+    if (targetBand == -1)
     {
         float x = logFToX(static_cast<float>(currentHighCutFreq));
         float y = cutPointY(currentHighCutFreq);
@@ -952,15 +956,12 @@ void FreqResponseDisplay::mouseDoubleClick(const juce::MouseEvent& e)
     {
         for (int i = 0; i < 4; ++i)
         {
-            if (bellParams[i].active)
+            float x = logFToX(static_cast<float>(bellParams[i].freq));
+            float y = gainToY(static_cast<float>(bellParams[i].gain));
+            if (std::hypot(mx - x, my - y) < grabRadius)
             {
-                float x = logFToX(static_cast<float>(bellParams[i].freq));
-                float y = gainToY(static_cast<float>(bellParams[i].gain));
-                if (std::hypot(mx - x, my - y) < grabRadius)
-                {
-                    targetBand = i + 2;
-                    break;
-                }
+                targetBand = i + 2;
+                break;
             }
         }
     }
@@ -1075,10 +1076,14 @@ void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::
         }
     }
 
-    // どのEQポイントの上でもない場合は、アナライザーの上下位置（基準オフセット）を調整する
+    // どのEQポイントの上でもない場合は、EQカーブを左右に移動する (上下操作は廃止)
     if (targetBand == -1)
     {
-        analyzerGainOffsetDb = std::clamp(analyzerGainOffsetDb + wheel.deltaY * 3.0f, -40.0f, 40.0f);
+        // ホイール量を対数周波数シフトに変換 (左ドラッグと同方向の感覚)
+        float shiftFactor = std::pow(10.0f, -wheel.deltaY * 0.1f);
+        currentMinF = std::max(currentMinF * shiftFactor, 1.0f);
+        currentMaxF = std::min(currentMaxF * shiftFactor, 24000.0f);
+        pathNeedsRecalculation = true;
         repaint();
         return;
     }
