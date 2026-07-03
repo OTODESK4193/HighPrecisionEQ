@@ -54,7 +54,11 @@ HighPrecisionEQAudioProcessorEditor::HighPrecisionEQAudioProcessorEditor(HighPre
         bandButtons[i].setButtonText(bandNames[i]);
         bandButtons[i].setRadioGroupId(1001);
         bandButtons[i].setClickingTogglesState(true);
-        bandButtons[i].onClick = [this, i]() { selectBand(static_cast<SelectedBand>(i)); };
+        bandButtons[i].onClick = [this, i]() {
+            selectBand(static_cast<SelectedBand>(i));
+            // Auto V が有効なら、選択した点を中央にある程度拡大して表示する
+            freqDisplay.focusSelectedBandIfAuto();
+        };
         addAndMakeVisible(bandButtons[i]);
         
         enableButtons[i].setClickingTogglesState(true);

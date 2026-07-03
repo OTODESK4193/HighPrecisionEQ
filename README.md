@@ -108,6 +108,18 @@ Comprehensive user manuals with full technical breakdowns and shortcuts are avai
 | **Mousewheel on Empty Space** | Move the EQ curve (view) **left/right** — follows the cursor at any zoom level |
 | **Left/Right Drag on Empty Space** | Move the EQ curve (view) **left/right only** (no vertical action) |
 | **Double-Click Empty Space** | Reset zoom and view range |
+| **`Auto V` toggle** | Vertical auto-fit; also centers and moderately zooms on the selected EQ point (magnifies sub-bass detail) |
+| **`Flat` toggle** | Relative/flatten display — subtracts the spectrum trend to expose narrow resonances; EQ curve and points stay editable |
+---
+## Sub-Bass Detail Modes (Auto V / Flat)
+
+Two toggles above the graph help you see and edit the extremely fine low-end that this plugin targets:
+
+- **Auto V (vertical auto-fit)**: The vertical axis adapts to the visible content, so even a fraction of a dB of variation fills the display — the 0.2 Hz-resolution detail becomes clearly visible instead of a flat line. Turning it on centers and moderately zooms the view on the currently selected point; you can then zoom further with Ctrl+wheel or H±.
+- **Flat (relative display)**: Subtracts the average spectral trend so the overall low-end slope is leveled and narrow resonances stand out. The EQ curve and control points are shown on the same relative scale and remain fully draggable, so you can grab points and tune Q right on the flattened analyzer.
+
+Both are independent and combine well — for the sharpest view of a sub-bass resonance, select the point, enable Auto V, add Flat, then zoom in with Ctrl+wheel. (These replace the old V+/V− vertical-zoom buttons.)
+
 ---
 ## License
 Licensed under the GNU Affero General Public License v3.0 (AGPLv3) - see the [LICENSE](LICENSE) file for details. Built using the **JUCE 8** framework.

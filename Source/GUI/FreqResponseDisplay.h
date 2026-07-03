@@ -32,6 +32,10 @@ public:
     void setProcessorAndEditor(HighPrecisionEQAudioProcessor* proc, HighPrecisionEQAudioProcessorEditor* ed);
     void setSelectedBand(int bandIdx);
 
+    // Auto V が有効なら、選択中バンドを中央にある程度拡大して表示する。
+    // (バンドボタンでの選択切替時に外部から呼ぶ。グラフ上の掴み操作では呼ばない)
+    void focusSelectedBandIfAuto();
+
     float getMinF() const noexcept { return currentMinF; }
     float getMaxF() const noexcept { return currentMaxF; }
     HighPrecisionEQAudioProcessor* getProcessor() const noexcept { return processor; }
@@ -152,6 +156,11 @@ private:
 
     // 周波数fにおけるアナライザーdBをバンド配列から補間
     float interpAnalyzerDb(double f, const std::vector<float>& src) const;
+
+    // 選択中バンドの中心周波数を返す (無効/不明なら -1)
+    float freqForSelectedBand() const;
+    // 選択中バンドを中央にある程度拡大して表示する (周波数軸のセンタリング+ズーム)
+    void focusOnSelectedBand();
 
     // paint 内で縦窓を更新するヘルパー (relativeMode 適用後の可視dB配列を渡す)
     void updateVerticalWindows(const std::vector<float>& analyzerDbPerX);

@@ -58,6 +58,9 @@ FreqResponseDisplay::FreqResponseDisplay()
 
     autoFitButton.onClick = [this]() {
         autoFitV = autoFitButton.getToggleState();
+        // ONにした瞬間、選択中ポイントを中央にある程度拡大して表示する
+        if (autoFitV)
+            focusOnSelectedBand();
         pathNeedsRecalculation = true;
         repaint();
     };
@@ -259,16 +262,37 @@ float FreqResponseDisplay::interpAnalyzerDb(double f, const std::vector<float>& 
 
 void FreqResponseDisplay::updateVerticalWindows(const std::vector<float>& ana)
 {
-    if (autoFitV && !ana.empty())
-    {
-        float mn = 1.0e9f, mx = -1.0e9f;
-        for (float v : ana) { mn = std::min(mn, v); mx = std::max(mx, v); }
+    const bool unified = autoFitV || relativeMode;
 
-        float pad = std::max(2.0f, (mx - mn) * 0.15f);
+    if (!unified)
+    {
+        // 既定: 従来の二段スケール (EQカーブ ±12 / アナライザー -70〜+10)
+        effCurveMinDb = currentMinDb;
+        effCurveMaxDb = currentMaxDb;
+        effAnaMinDb = -70.0f + analyzerGainOffsetDb;
+        effAnaMaxDb =  10.0f + analyzerGainOffsetDb;
+        return;
+    }
+
+    // --- 統一窓モード (Auto V / Flat) ---
+    // アナライザー・EQカーブ・Hold・ポイントを同一の縦窓で描画する。
+    // EQポイント(Bellゲイン)とカーブ(≒0dB)が必ず画面内に入るよう最低限のマージンを確保する。
+    float gExt = 3.0f;
+    for (int i = 0; i < 4; ++i)
+        if (bellParams[i].active)
+            gExt = std::max(gExt, std::abs(static_cast<float>(bellParams[i].gain)) + 2.0f);
+
+    if (autoFitV)
+    {
+        // 可視域オートフィット: アナライザー内容 + EQ(0±gExt) を包む窓に合わせる
+        float mn = -gExt, mx = gExt;
+        if (!ana.empty())
+            for (float v : ana) { mn = std::min(mn, v); mx = std::max(mx, v); }
+
+        float pad = std::max(2.0f, (mx - mn) * 0.12f);
         float targetMin = mn - pad;
         float targetMax = mx + pad;
 
-        // 最小スパンを確保して過剰拡大 (ノイズ増幅) を防ぐ
         const float minSpan = 6.0f;
         if (targetMax - targetMin < minSpan)
         {
@@ -281,26 +305,53 @@ void FreqResponseDisplay::updateVerticalWindows(const std::vector<float>& ana)
         const float a = 0.15f;
         viewMinDb += (targetMin - viewMinDb) * a;
         viewMaxDb += (targetMax - viewMaxDb) * a;
-
-        effCurveMinDb = viewMinDb; effCurveMaxDb = viewMaxDb;
-        effAnaMinDb   = viewMinDb; effAnaMaxDb   = viewMaxDb;
     }
-    else
+    else // relativeMode のみ (オートフィット無し): 0対称の固定窓
     {
-        // 既定: 現状の二段スケール (EQカーブ ±12 / アナライザー -70〜+10)
-        effCurveMinDb = currentMinDb;
-        effCurveMaxDb = currentMaxDb;
-        effAnaMinDb = -70.0f + analyzerGainOffsetDb;
-        effAnaMaxDb =  10.0f + analyzerGainOffsetDb;
-
-        // relativeMode 単独 (オートフィット無し) のときは detrend で 0dB 付近に集まるため、
-        // アナライザーは対称の狭い窓にして起伏を見やすくする。
-        if (relativeMode)
+        float span = std::max(18.0f, gExt);
+        if (!ana.empty())
         {
-            effAnaMinDb = -24.0f + analyzerGainOffsetDb;
-            effAnaMaxDb =  24.0f + analyzerGainOffsetDb;
+            float amax = 0.0f;
+            for (float v : ana) amax = std::max(amax, std::abs(v));
+            span = std::max(span, amax + 3.0f);
         }
+        viewMinDb = -span;
+        viewMaxDb =  span;
     }
+
+    effCurveMinDb = viewMinDb; effCurveMaxDb = viewMaxDb;
+    effAnaMinDb   = viewMinDb; effAnaMaxDb   = viewMaxDb;
+}
+
+float FreqResponseDisplay::freqForSelectedBand() const
+{
+    if (selectedBandIdx == 0) return static_cast<float>(currentCutoffHz);
+    if (selectedBandIdx == 1) return static_cast<float>(currentHighCutFreq);
+    if (selectedBandIdx >= 2 && selectedBandIdx <= 5)
+        return static_cast<float>(bellParams[selectedBandIdx - 2].freq);
+    return -1.0f;
+}
+
+void FreqResponseDisplay::focusOnSelectedBand()
+{
+    float f = freqForSelectedBand();
+    if (f <= 0.0f) return;
+
+    // 選択点を中心に、ある程度拡大した周波数レンジにする (比率 ~16 ≒ ±2オクターブ)。
+    // この後 Ctrl+ホイール / H± でさらに拡大縮小できる。
+    const float ratio = 16.0f;
+    float half = std::sqrt(ratio);
+    currentMinF = std::clamp(f / half, 1.0f, 24000.0f);
+    currentMaxF = std::clamp(f * half, currentMinF * 1.01f, 25000.0f);
+
+    pathNeedsRecalculation = true;
+    repaint();
+}
+
+void FreqResponseDisplay::focusSelectedBandIfAuto()
+{
+    if (autoFitV)
+        focusOnSelectedBand();
 }
 
 void FreqResponseDisplay::paint(juce::Graphics& g)
@@ -374,8 +425,8 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
         updateVerticalWindows({});
     }
 
-    // オートフィット時は窓が毎フレーム変化するため、EQカーブパスを再計算する
-    if (autoFitV)
+    // 統一窓モード(Auto V/Flat)では窓が毎フレーム変化しうるため、EQカーブパスを再計算する
+    if (autoFitV || relativeMode)
         pathNeedsRecalculation = true;
 
     // 1. 周波数グリッド描画 (ズームに応じた適応型動的グリッド)

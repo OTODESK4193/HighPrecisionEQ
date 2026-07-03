@@ -127,7 +127,8 @@ Turning "Hold" on keeps the maximum level of every band displayed as a thin line
 | Action | Result |
 | :--- | :--- |
 | **H+ / H− buttons** | Zoom the frequency axis in/out. |
-| **V+ / V− buttons** | Zoom the gain axis in/out (±3 dB to ±48 dB). |
+| **`Auto V` toggle** | Vertical auto-fit. The vertical axis automatically scales to the visible content so fine sub-bass variations (down to 0.2 Hz steps) become easy to see. Turning it on also **centers and moderately zooms the view on the currently selected EQ point** (you can then zoom further with `Ctrl`+wheel / H±). While it stays on, selecting another band with the band buttons re-focuses on that point. |
+| **`Flat` toggle** | Relative (flatten) display. Subtracts the average trend of the visible spectrum to emphasize its bumps and dips, making narrow resonances stand out. The EQ curve and points are shown on the same relative scale, and you can still grab points and adjust Q directly on the analyzer in this mode. Combine with `Auto V` for maximum visibility. |
 | **`Ctrl` + mouse wheel** | Zooms (in/out) the frequency axis **centered on the cursor** — ideal for inspecting the sub region. |
 | **Left/right drag (empty space)** | Moves the EQ curve (view) **left/right only**. There is no vertical action. |
 | **Mouse wheel (empty space)** | Moves the EQ curve (view) **left/right**. It follows the cursor whether zoomed in or at normal scale. |
@@ -135,6 +136,7 @@ Turning "Hold" on keeps the maximum level of every band displayed as a thin line
 | **Hover / while dragging** | Shows frequency (the active frequency while dragging) and note name in real time (e.g. `55.0 Hz / A1`). |
 
 > **Tip**: When zoomed in far, dragging a point below 60 Hz snaps the frequency to a 0.2 Hz grid for precise sub-bass work. You can zoom all the way down to 1 Hz.
+> **Seeing sub-bass detail**: Select the target EQ point, turn on `Auto V` (centers and zooms on it), optionally turn on `Flat` to level the trend, then zoom further with `Ctrl`+wheel.
 
 ---
 
