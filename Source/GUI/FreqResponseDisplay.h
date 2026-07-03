@@ -132,7 +132,32 @@ private:
     float dragStartMinF = 1.0f, dragStartMaxF = 25000.0f;
     float dragStartMinDb = -12.0f;
 
-    juce::TextButton zoomInXBtn{ "H+" }, zoomOutXBtn{ "H-" }, zoomInYBtn{ "V+" }, zoomOutYBtn{ "V-" };
+    // --- 縦軸表示モード ---
+    // autoFitV      : 可視域オートフィット (見えている帯域のmin/maxに縦軸を合わせる)。
+    //                 ONのときアナライザー/EQカーブ/Hold/グリッドを同一の統一窓で描画する。
+    // relativeMode  : 相対表示 (可視スペクトルの平滑トレンドを引いて残差を強調)。
+    bool autoFitV = false;
+    bool relativeMode = false;
+
+    // オートフィットの目標窓 (時間方向に平滑化して適用し、ジッターを抑える)
+    float viewMinDb = -12.0f, viewMaxDb = 12.0f;
+
+    // 実際に各変換で使う「有効な縦窓」(モードに応じて paint 冒頭で更新)
+    float effCurveMinDb = -12.0f, effCurveMaxDb = 12.0f; // gainToY/yToGain/cutPointY 用
+    float effAnaMinDb = -70.0f, effAnaMaxDb = 10.0f;     // analyzerGainToY 用
+
+    // アナライザーのピクセル単位dB配列 (paint冒頭で事前計算し描画で再利用)
+    std::vector<float> anaDbPerX, holdDbPerX;
+    bool haveAnaData = false;
+
+    // 周波数fにおけるアナライザーdBをバンド配列から補間
+    float interpAnalyzerDb(double f, const std::vector<float>& src) const;
+
+    // paint 内で縦窓を更新するヘルパー (relativeMode 適用後の可視dB配列を渡す)
+    void updateVerticalWindows(const std::vector<float>& analyzerDbPerX);
+
+    juce::TextButton zoomInXBtn{ "H+" }, zoomOutXBtn{ "H-" };
+    juce::TextButton autoFitButton{ "Auto V" }, relativeButton{ "Flat" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(FreqResponseDisplay)
 };

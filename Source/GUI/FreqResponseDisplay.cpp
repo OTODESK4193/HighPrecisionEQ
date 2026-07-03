@@ -28,16 +28,14 @@ FreqResponseDisplay::FreqResponseDisplay()
     // VBlankでスムーズな描画同期
     vblankAttachment = std::make_unique<juce::VBlankAttachment>(this, [this]() { vblankUpdate(); });
 
-    // ズームボタンの設定
+    // ズーム/表示モードボタンの設定
     zoomInXBtn.setButtonText("H+");
     zoomOutXBtn.setButtonText("H-");
-    zoomInYBtn.setButtonText("V+");
-    zoomOutYBtn.setButtonText("V-");
 
     addAndMakeVisible(zoomInXBtn);
     addAndMakeVisible(zoomOutXBtn);
-    addAndMakeVisible(zoomInYBtn);
-    addAndMakeVisible(zoomOutYBtn);
+    addAndMakeVisible(autoFitButton);
+    addAndMakeVisible(relativeButton);
 
     auto configureZoomBtn = [](juce::TextButton& btn) {
         btn.setColour(juce::TextButton::buttonColourId, juce::Colour(0x22ffffff));
@@ -47,8 +45,27 @@ FreqResponseDisplay::FreqResponseDisplay()
 
     configureZoomBtn(zoomInXBtn);
     configureZoomBtn(zoomOutXBtn);
-    configureZoomBtn(zoomInYBtn);
-    configureZoomBtn(zoomOutYBtn);
+    configureZoomBtn(autoFitButton);
+    configureZoomBtn(relativeButton);
+
+    // トグルボタン: 押下状態を色で示す (Auto-fit V / Relative-Flatten)
+    autoFitButton.setClickingTogglesState(true);
+    relativeButton.setClickingTogglesState(true);
+    autoFitButton.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff3a6ea5));
+    relativeButton.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff3a6ea5));
+    autoFitButton.setTooltip("Auto-fit V: 見えている帯域に縦軸を自動フィット");
+    relativeButton.setTooltip("Relative/Flatten: 平均トレンドを引いて起伏を強調");
+
+    autoFitButton.onClick = [this]() {
+        autoFitV = autoFitButton.getToggleState();
+        pathNeedsRecalculation = true;
+        repaint();
+    };
+    relativeButton.onClick = [this]() {
+        relativeMode = relativeButton.getToggleState();
+        pathNeedsRecalculation = true;
+        repaint();
+    };
 
     zoomInXBtn.onClick = [this]() {
         float centerLog = std::sqrt(currentMinF * currentMaxF);
@@ -74,18 +91,6 @@ FreqResponseDisplay::FreqResponseDisplay()
         repaint();
     };
 
-    zoomInYBtn.onClick = [this]() {
-        currentMinDb = std::max(currentMinDb * 0.7f, -48.0f);
-        currentMaxDb = -currentMinDb;
-        repaint();
-    };
-
-    zoomOutYBtn.onClick = [this]() {
-        currentMinDb = std::min(currentMinDb * 1.4f, -3.0f);
-        currentMaxDb = -currentMinDb;
-        repaint();
-    };
-
     precomputeFrequencies();
 }
 
@@ -93,11 +98,11 @@ void FreqResponseDisplay::resized()
 {
     auto r = getLocalBounds().reduced(8);
     auto zoomRow = r.removeFromTop(20);
-    
-    // 右上にコンパクトに並べる
-    zoomOutYBtn.setBounds(zoomRow.removeFromRight(32));
+
+    // 右上にコンパクトに並べる (H+/H- ズーム と 縦軸モードトグル)
+    relativeButton.setBounds(zoomRow.removeFromRight(48));
     zoomRow.removeFromRight(2);
-    zoomInYBtn.setBounds(zoomRow.removeFromRight(32));
+    autoFitButton.setBounds(zoomRow.removeFromRight(56));
     zoomRow.removeFromRight(8);
     zoomOutXBtn.setBounds(zoomRow.removeFromRight(32));
     zoomRow.removeFromRight(2);
@@ -193,14 +198,14 @@ void FreqResponseDisplay::precomputeFrequencies()
 
 float FreqResponseDisplay::gainToY(float gainDecibels) const
 {
-    float val = (gainDecibels - currentMinDb) / (currentMaxDb - currentMinDb);
+    float val = (gainDecibels - effCurveMinDb) / (effCurveMaxDb - effCurveMinDb);
     return (1.0f - val) * static_cast<float>(getHeight());
 }
 
 float FreqResponseDisplay::yToGain(float y) const
 {
     float val = y / static_cast<float>(getHeight());
-    return currentMinDb + (1.0f - val) * (currentMaxDb - currentMinDb);
+    return effCurveMinDb + (1.0f - val) * (effCurveMaxDb - effCurveMinDb);
 }
 
 float FreqResponseDisplay::cutPointY(double freqHz) const
@@ -215,17 +220,87 @@ float FreqResponseDisplay::cutPointY(double freqHz) const
         if (!std::isnan(mag) && !std::isinf(mag))
             db = 20.0 * std::log10(std::max(mag, 1e-10));
     }
-    db = std::clamp(db, static_cast<double>(currentMinDb), static_cast<double>(currentMaxDb));
+    db = std::clamp(db, static_cast<double>(effCurveMinDb), static_cast<double>(effCurveMaxDb));
     return gainToY(static_cast<float>(db));
 }
 
 float FreqResponseDisplay::analyzerGainToY(float gainDecibels) const
 {
-    // アナライザーのゲイン描画範囲 (通常 -70 dB 〜 +10 dB)
-    float minDb = -70.0f + analyzerGainOffsetDb;
-    float maxDb = 10.0f + analyzerGainOffsetDb;
-    float val = (gainDecibels - minDb) / (maxDb - minDb);
+    // アナライザーのゲイン描画範囲 (有効な縦窓。既定 -70〜+10dB、Auto-fit時は統一窓)
+    float val = (gainDecibels - effAnaMinDb) / (effAnaMaxDb - effAnaMinDb);
     return (1.0f - val) * static_cast<float>(getHeight());
+}
+
+float FreqResponseDisplay::interpAnalyzerDb(double f, const std::vector<float>& src) const
+{
+    const int numBands = AnalyzerDSP::NumBands;
+    if (static_cast<int>(src.size()) < numBands) return -120.0f;
+
+    double idx = 0.0;
+    if (f <= 1.0)                idx = 0.0;
+    else if (f < 60.0)          idx = (f - 1.0) / 0.2;              // 1-60Hz: 0.2Hz刻み (バンド0-295)
+    else if (f < 200.0)         idx = 295.0 + (f - 60.0);          // 60-200Hz: 1Hz刻み (295-435)
+    else
+    {
+        double logF = std::log(f);
+        double log200 = std::log(200.0);
+        double log25000 = std::log(std::min(25000.0, currentSampleRate * 0.45));
+        if (log25000 <= log200) log25000 = log200 + 1.0;
+        double ratio = (logF - log200) / (log25000 - log200);
+        idx = 435.0 + ratio * (numBands - 1 - 435);
+    }
+
+    double clampedIdx = std::clamp(idx, 0.0, static_cast<double>(numBands - 1));
+    int idx0 = static_cast<int>(std::floor(clampedIdx));
+    int idx1 = std::clamp(idx0 + 1, 0, numBands - 1);
+    float frac = static_cast<float>(clampedIdx - idx0);
+    return src[static_cast<size_t>(idx0)] * (1.0f - frac) + src[static_cast<size_t>(idx1)] * frac;
+}
+
+void FreqResponseDisplay::updateVerticalWindows(const std::vector<float>& ana)
+{
+    if (autoFitV && !ana.empty())
+    {
+        float mn = 1.0e9f, mx = -1.0e9f;
+        for (float v : ana) { mn = std::min(mn, v); mx = std::max(mx, v); }
+
+        float pad = std::max(2.0f, (mx - mn) * 0.15f);
+        float targetMin = mn - pad;
+        float targetMax = mx + pad;
+
+        // 最小スパンを確保して過剰拡大 (ノイズ増幅) を防ぐ
+        const float minSpan = 6.0f;
+        if (targetMax - targetMin < minSpan)
+        {
+            float c = 0.5f * (targetMin + targetMax);
+            targetMin = c - 0.5f * minSpan;
+            targetMax = c + 0.5f * minSpan;
+        }
+
+        // 時間方向に平滑化して窓のジッターを抑える
+        const float a = 0.15f;
+        viewMinDb += (targetMin - viewMinDb) * a;
+        viewMaxDb += (targetMax - viewMaxDb) * a;
+
+        effCurveMinDb = viewMinDb; effCurveMaxDb = viewMaxDb;
+        effAnaMinDb   = viewMinDb; effAnaMaxDb   = viewMaxDb;
+    }
+    else
+    {
+        // 既定: 現状の二段スケール (EQカーブ ±12 / アナライザー -70〜+10)
+        effCurveMinDb = currentMinDb;
+        effCurveMaxDb = currentMaxDb;
+        effAnaMinDb = -70.0f + analyzerGainOffsetDb;
+        effAnaMaxDb =  10.0f + analyzerGainOffsetDb;
+
+        // relativeMode 単独 (オートフィット無し) のときは detrend で 0dB 付近に集まるため、
+        // アナライザーは対称の狭い窓にして起伏を見やすくする。
+        if (relativeMode)
+        {
+            effAnaMinDb = -24.0f + analyzerGainOffsetDb;
+            effAnaMaxDb =  24.0f + analyzerGainOffsetDb;
+        }
+    }
 }
 
 void FreqResponseDisplay::paint(juce::Graphics& g)
@@ -249,6 +324,59 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
     int h = getHeight();
 
     if (w <= 0 || h <= 0) return;
+
+    // --- アナライザーデータの事前計算 + 縦窓の決定 ---
+    // (グリッド/アナライザー/EQカーブ すべてが有効窓 eff* を使うため、描画前に確定させる)
+    haveAnaData = false;
+    if (analyzer != nullptr)
+    {
+        std::vector<float> energies = analyzer->getEnergies();
+        std::vector<float> holdEnergies = analyzer->getHoldEnergies();
+
+        anaDbPerX.resize(static_cast<size_t>(w));
+        holdDbPerX.resize(static_cast<size_t>(w));
+        for (int i = 0; i < w; ++i)
+        {
+            float f = xToLogF(static_cast<float>(i));
+            anaDbPerX[static_cast<size_t>(i)]  = interpAnalyzerDb(f, energies);
+            holdDbPerX[static_cast<size_t>(i)] = interpAnalyzerDb(f, holdEnergies);
+        }
+
+        // relativeMode: 可視スペクトルの平滑トレンドを引いて残差を強調する。
+        // アナライザーとHoldは同じトレンドで引き、相対関係を保つ。
+        if (relativeMode)
+        {
+            std::vector<float> trend(static_cast<size_t>(w));
+            int R = std::max(4, w / 8); // 移動平均の片側幅
+            double acc = 0.0;
+            // prefix-sum で O(w) 移動平均
+            std::vector<double> prefix(static_cast<size_t>(w) + 1, 0.0);
+            for (int i = 0; i < w; ++i) prefix[static_cast<size_t>(i) + 1] = prefix[static_cast<size_t>(i)] + anaDbPerX[static_cast<size_t>(i)];
+            for (int i = 0; i < w; ++i)
+            {
+                int lo = std::max(0, i - R);
+                int hi = std::min(w, i + R + 1);
+                trend[static_cast<size_t>(i)] = static_cast<float>((prefix[static_cast<size_t>(hi)] - prefix[static_cast<size_t>(lo)]) / (hi - lo));
+            }
+            (void)acc;
+            for (int i = 0; i < w; ++i)
+            {
+                anaDbPerX[static_cast<size_t>(i)]  -= trend[static_cast<size_t>(i)];
+                holdDbPerX[static_cast<size_t>(i)] -= trend[static_cast<size_t>(i)];
+            }
+        }
+
+        haveAnaData = true;
+        updateVerticalWindows(anaDbPerX);
+    }
+    else
+    {
+        updateVerticalWindows({});
+    }
+
+    // オートフィット時は窓が毎フレーム変化するため、EQカーブパスを再計算する
+    if (autoFitV)
+        pathNeedsRecalculation = true;
 
     // 1. 周波数グリッド描画 (ズームに応じた適応型動的グリッド)
     float range = currentMaxF - currentMinF;
@@ -329,85 +457,44 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
         }
     }
 
-    // 2. ゲイングリッド描画 (dB)
+    // 2. ゲイングリッド描画 (dB)。有効窓 (eff*) に合わせて目盛りを描く。
+    //    左=EQカーブ縦軸、右=同じy位置でのアナライザー縦軸の値。
+    //    Auto-fit時は両者が一致し、相対表示時は右側が「相対dB」を示す。
     g.setColour(juce::Colour(0xff222230));
-    float step = (currentMaxDb - currentMinDb) / 4.0f;
+    float step = (effCurveMaxDb - effCurveMinDb) / 4.0f;
     for (int i = 0; i <= 4; ++i)
     {
-        float db = currentMinDb + static_cast<float>(i) * step;
+        float db = effCurveMinDb + static_cast<float>(i) * step;
         float y = gainToY(db);
         g.drawHorizontalLine(static_cast<int>(y), 0.0f, static_cast<float>(w));
 
         g.setColour(juce::Colour(0xff555570));
         g.setFont(juce::Font(juce::FontOptions("Outfit", 9.0f, juce::Font::plain)));
         g.drawText(juce::String(db, 1) + " dB", 5, static_cast<int>(y) - 12, 50, 12, juce::Justification::left);
-        
-        // 右側のアナライザー音量メモリを描画 (左側の目盛りに現在のオフセット分を引いたもの)
-        float db_ana = db - analyzerGainOffsetDb;
-        g.drawText(juce::String(db_ana, 1) + " dB", static_cast<int>(w) - 55, static_cast<int>(y) - 12, 50, 12, juce::Justification::right);
-        
+
+        // 右側: 同じy位置に対応するアナライザー縦軸のdB値
+        float frac = (h > 0) ? (y / static_cast<float>(h)) : 0.0f;
+        float db_ana = effAnaMinDb + (1.0f - frac) * (effAnaMaxDb - effAnaMinDb);
+        juce::String anaLabel = relativeMode ? (juce::String(db_ana, 1) + " dB(rel)")
+                                             : (juce::String(db_ana, 1) + " dB");
+        g.drawText(anaLabel, static_cast<int>(w) - 62, static_cast<int>(y) - 12, 57, 12, juce::Justification::right);
+
         g.setColour(juce::Colour(0xff222230));
     }
 
-    // 3. アナライザーリアルタイムスペクトラムの描画
-    if (analyzer != nullptr)
+    // 3. アナライザーリアルタイムスペクトラムの描画 (dB配列は冒頭で事前計算済み)
+    if (haveAnaData)
     {
-        std::vector<float> energies = analyzer->getEnergies();
-        
-        const int numBands = AnalyzerDSP::NumBands;
-
-        // ハイブリッド補間 (1-60Hzは0.2Hz線形、60-200Hzは1Hz線形、200Hz-25kHzは対数)
-        auto getInterpolatedDb = [&](double f, const std::vector<float>& srcEnergies) -> float
-        {
-            double idx = 0.0;
-            if (f <= 1.0)
-            {
-                idx = 0.0;
-            }
-            else if (f < 60.0)
-            {
-                // 1.0Hz〜60.0Hz (0.2Hzステップ, バンド0-295)
-                idx = (f - 1.0) / 0.2;
-            }
-            else if (f < 200.0)
-            {
-                // 60.0Hz〜200.0Hz (1.0Hzステップ, バンド295-435)
-                idx = 295.0 + (f - 60.0);
-            }
-            else
-            {
-                // 200Hz〜25000Hz (対数等間隔, バンド435〜numBands-1)
-                double logF = std::log(f);
-                double log200 = std::log(200.0);
-                double log25000 = std::log(std::min(25000.0, currentSampleRate * 0.45));
-                
-                if (log25000 <= log200) log25000 = log200 + 1.0;
-                
-                double ratio = (logF - log200) / (log25000 - log200);
-                idx = 435.0 + ratio * (numBands - 1 - 435);
-            }
-            
-            double clampedIdx = std::clamp(idx, 0.0, static_cast<double>(numBands - 1));
-            int idx0 = static_cast<int>(std::floor(clampedIdx));
-            int idx1 = std::clamp(idx0 + 1, 0, numBands - 1);
-            double frac = clampedIdx - idx0;
-            
-            return srcEnergies[static_cast<size_t>(idx0)] * (1.0f - static_cast<float>(frac)) 
-                 + srcEnergies[static_cast<size_t>(idx1)] * static_cast<float>(frac);
-        };
 
         juce::Path analyzerPath;
         juce::Path strokePath;
         juce::Path holdPath;
         bool started = false;
         
-        std::vector<float> holdEnergies = analyzer->getHoldEnergies();
-
         for (int i = 0; i < w; ++i)
         {
-            float f = xToLogF(static_cast<float>(i));
-            float magDb = getInterpolatedDb(f, energies);
-            float holdDb = getInterpolatedDb(f, holdEnergies);
+            float magDb = anaDbPerX[static_cast<size_t>(i)];
+            float holdDb = holdDbPerX[static_cast<size_t>(i)];
             float y = analyzerGainToY(magDb);
             float holdY = analyzerGainToY(holdDb);
             y = std::clamp(y, 0.0f, static_cast<float>(h));
@@ -1007,27 +1094,26 @@ void FreqResponseDisplay::mouseDoubleClick(const juce::MouseEvent& e)
 
 void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel)
 {
-    // 1. Ctrlキー押下時の周波数軸ズーム
+    // 1. Ctrlキー押下時の周波数軸ズーム (拡大・縮小)
     if (e.mods.isCtrlDown())
     {
         float mx = static_cast<float>(e.x);
         float targetF = xToLogF(mx);
-        
-        float zoomFactor = std::pow(1.15f, -wheel.deltaY); // 上スクロールで拡大、下で縮小
-        
+
+        float zoomFactor = std::pow(1.15f, -wheel.deltaY);
+
         float centerLog = std::log10(targetF);
         float minLog = std::log10(currentMinF);
         float maxLog = std::log10(currentMaxF);
-        
+
         float newMinLog = centerLog - (centerLog - minLog) * zoomFactor;
         float newMaxLog = centerLog + (maxLog - centerLog) * zoomFactor;
-        
+
         float newMinF = std::pow(10.0f, newMinLog);
         float newMaxF = std::pow(10.0f, newMaxLog);
-        
+
         float ratio = newMaxF / newMinF;
-        
-        // ズーム比制限 (1.002f 〜 25000.0f)
+
         if (ratio >= 1.002f && ratio <= 25000.0f)
         {
             currentMinF = std::max(newMinF, 1.0f);
@@ -1051,7 +1137,6 @@ void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::
     // どのEQポイントの上でもない場合は、EQカーブを左右に移動する (上下操作は廃止)
     if (targetBand == -1)
     {
-        // ホイール量を対数周波数シフトに変換 (左ドラッグと同方向の感覚)
         float shiftFactor = std::pow(10.0f, -wheel.deltaY * 0.1f);
         currentMinF = std::max(currentMinF * shiftFactor, 1.0f);
         currentMaxF = std::min(currentMaxF * shiftFactor, 24000.0f);
@@ -1072,10 +1157,10 @@ void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::
         float currentSlope = apvts.getRawParameterValue(slopeID)->load();
         float direction = (wheel.deltaY > 0.0f) ? 12.0f : -12.0f;
         float newSlope = currentSlope + direction;
-        
+
         auto rangeS = apvts.getParameterRange(slopeID);
         newSlope = std::clamp(newSlope, rangeS.start, rangeS.end);
-        
+
         apvts.getParameter(slopeID)->setValueNotifyingHost(rangeS.convertTo0to1(newSlope));
     }
     else if (targetBand == 1) // HighCut
@@ -1084,10 +1169,10 @@ void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::
         float currentSlope = apvts.getRawParameterValue(slopeID)->load();
         float direction = (wheel.deltaY > 0.0f) ? 12.0f : -12.0f;
         float newSlope = currentSlope + direction;
-        
+
         auto rangeS = apvts.getParameterRange(slopeID);
         newSlope = std::clamp(newSlope, rangeS.start, rangeS.end);
-        
+
         apvts.getParameter(slopeID)->setValueNotifyingHost(rangeS.convertTo0to1(newSlope));
     }
     else if (targetBand >= 2 && targetBand <= 5) // Bells
@@ -1095,14 +1180,14 @@ void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::
         int idx = targetBand - 1; // Bell1..4 (1..4)
         juce::String idSuffix = juce::String(idx);
         juce::String qID = "bell_q_" + idSuffix;
-        
+
         float currentQ = apvts.getRawParameterValue(qID)->load();
         float multiplier = std::pow(1.15f, wheel.deltaY * 2.0f);
         float newQ = currentQ * multiplier;
-        
+
         auto rangeQ = apvts.getParameterRange(qID);
         newQ = std::clamp(newQ, rangeQ.start, rangeQ.end);
-        
+
         apvts.getParameter(qID)->setValueNotifyingHost(rangeQ.convertTo0to1(newQ));
     }
 }
@@ -1112,8 +1197,7 @@ void FreqResponseDisplay::modifierKeysChanged(const juce::ModifierKeys& mods)
     if (processor == nullptr) return;
 
     // ポイントを掴んでいる最中 (クリック/ドラッグ中) にShiftの押下状態が
-    // 変わったら、Solo-Sweepを追従させる。これにより「先にクリックしてから
-    // Shiftを押す」操作でもSoloが発動する。
+    // 変わったら、Solo-Sweepを追従させる。「先にクリックしてからShiftを押す」でも発動する。
     if (activeDragBand != -1)
     {
         if (mods.isShiftDown())
@@ -1152,7 +1236,7 @@ void FreqResponseDisplay::mouseMove(const juce::MouseEvent& e)
 {
     mouseX = e.x;
     mouseY = e.y;
-    
+
     if (mouseX >= 0 && mouseX < getWidth() && mouseY >= 0 && mouseY < getHeight())
     {
         isHovering = true;
@@ -1165,6 +1249,6 @@ void FreqResponseDisplay::mouseMove(const juce::MouseEvent& e)
         mouseX = -1;
         mouseY = -1;
     }
-    
+
     repaint();
 }
