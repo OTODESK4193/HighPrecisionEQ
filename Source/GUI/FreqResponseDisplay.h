@@ -102,6 +102,12 @@ private:
     float yToGain(float y) const;
     float analyzerGainToY(float gainDecibels) const;
 
+    // LC/HCポイントのY座標 (実際のEQカーブ上に配置。カットオフでは約-3dB)
+    float cutPointY(double freqHz) const;
+
+    // カーブ再計算用スクラッチ (再確保を避けるためメンバー化)
+    std::vector<double> curveFreqs, curveMags;
+
     void drawEQPoints(juce::Graphics& g);
 
     void mouseDown(const juce::MouseEvent& e) override;

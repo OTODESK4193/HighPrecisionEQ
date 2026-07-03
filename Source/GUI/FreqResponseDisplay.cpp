@@ -185,6 +185,22 @@ float FreqResponseDisplay::yToGain(float y) const
     return currentMinDb + (1.0f - val) * (currentMaxDb - currentMinDb);
 }
 
+float FreqResponseDisplay::cutPointY(double freqHz) const
+{
+    // カットポイントは実際のEQカーブ上に置く (Butterworthのカットオフでは約-3dB)。
+    // 以前は実効のないgainDbパラメータのY座標を使っていたため、カーブとポイントが
+    // ずれて見えることがあった。
+    double db = 0.0;
+    if (processor != nullptr)
+    {
+        double mag = processor->getEQ().getMagnitudeForFrequency(freqHz);
+        if (!std::isnan(mag) && !std::isinf(mag))
+            db = 20.0 * std::log10(std::max(mag, 1e-10));
+    }
+    db = std::clamp(db, static_cast<double>(currentMinDb), static_cast<double>(currentMaxDb));
+    return gainToY(static_cast<float>(db));
+}
+
 float FreqResponseDisplay::analyzerGainToY(float gainDecibels) const
 {
     // アナライザーのゲイン描画範囲 (通常 -70 dB 〜 +10 dB)
@@ -423,21 +439,77 @@ void FreqResponseDisplay::paint(juce::Graphics& g)
 
         if (processor != nullptr)
         {
+            // 高Qの鋭いピーク/ノッチがピクセルの隙間に落ちて描画から消えないよう、
+            // 1ピクセルあたり4点で評価し、偏差(|dB|)が最大の点を採用する
+            constexpr int OverSample = 4;
+            const int numEval = w * OverSample;
+            curveFreqs.resize(static_cast<size_t>(numEval));
+            curveMags.resize(static_cast<size_t>(numEval));
+
+            for (int i = 0; i < numEval; ++i)
+                curveFreqs[static_cast<size_t>(i)] = static_cast<double>(xToLogF(static_cast<float>(i) / static_cast<float>(OverSample)));
+
+            // 各Bellの中心周波数ちょうどの点も評価リストに追加する。
+            // どれだけ狭いピーク/ノッチでも先端の正確な深さが必ず描画される。
+            int numBellExtras = 0;
+            int bellExtraIdx[4] = { -1, -1, -1, -1 };
+            for (int bIdx = 0; bIdx < 4; ++bIdx)
+            {
+                if (bellParams[static_cast<size_t>(bIdx)].active
+                    && bellParams[static_cast<size_t>(bIdx)].freq >= currentMinF
+                    && bellParams[static_cast<size_t>(bIdx)].freq <= currentMaxF)
+                {
+                    bellExtraIdx[bIdx] = numEval + numBellExtras;
+                    curveFreqs.push_back(bellParams[static_cast<size_t>(bIdx)].freq);
+                    ++numBellExtras;
+                }
+            }
+            curveMags.resize(curveFreqs.size());
+
+            // 1回のロックで全ポイントを一括評価。
+            // (以前は1ピクセルごとに個別取得していたため、描画途中でパラメータ更新が
+            //  割り込むとカーブが途中で切り替わって壊れることがあった)
+            processor->getEQ().getMagnitudeCurve(curveFreqs.data(), curveMags.data(), static_cast<int>(curveFreqs.size()));
+
+            auto magToDb = [](double mag) -> double
+            {
+                if (std::isnan(mag) || std::isinf(mag)) mag = 1.0; // NaN/inf ガード
+                return 20.0 * std::log10(std::max(mag, 1e-10));
+            };
+
+            // ピクセルごとに偏差最大の評価点を採用
+            std::vector<double> pixelDb(static_cast<size_t>(w), 0.0);
+            for (int x = 0; x < w; ++x)
+            {
+                double bestDb = 0.0;
+                double bestAbs = -1.0;
+                for (int k = 0; k < OverSample; ++k)
+                {
+                    double db = magToDb(curveMags[static_cast<size_t>(x * OverSample + k)]);
+                    if (std::abs(db) > bestAbs)
+                    {
+                        bestAbs = std::abs(db);
+                        bestDb = db;
+                    }
+                }
+                pixelDb[static_cast<size_t>(x)] = bestDb;
+            }
+
+            // Bell中心周波数の正確な値で該当ピクセルを上書き
+            for (int bIdx = 0; bIdx < 4; ++bIdx)
+            {
+                if (bellExtraIdx[bIdx] < 0) continue;
+                int px = static_cast<int>(logFToX(static_cast<float>(bellParams[static_cast<size_t>(bIdx)].freq)));
+                px = std::clamp(px, 0, w - 1);
+                double db = magToDb(curveMags[static_cast<size_t>(bellExtraIdx[bIdx])]);
+                if (std::abs(db) > std::abs(pixelDb[static_cast<size_t>(px)]))
+                    pixelDb[static_cast<size_t>(px)] = db;
+            }
+
             bool started = false;
             for (int x = 0; x < w; ++x)
             {
-                if (static_cast<size_t>(x) >= precomputedFreqs.size()) break;
-                const auto& pf = precomputedFreqs[static_cast<size_t>(x)];
-
-                // TPT SVF EQから直接正確かつ数値的に完全に安定な振幅応答を取得する
-                double totalMag = processor->getEQ().getMagnitudeForFrequency(pf.f);
-
-                // NaN/inf ガード
-                if (std::isnan(totalMag) || std::isinf(totalMag)) totalMag = 1.0;
-                totalMag = std::max(totalMag, 1e-10);
-
-                double magDb = 20.0 * std::log10(totalMag);
-                float y = gainToY(static_cast<float>(magDb));
+                float y = gainToY(static_cast<float>(pixelDb[static_cast<size_t>(x)]));
                 y = std::clamp(y, -100.0f, static_cast<float>(h) + 100.0f);
 
                 if (!started)
@@ -599,8 +671,7 @@ void FreqResponseDisplay::drawEQPoints(juce::Graphics& g)
     if (currentLowcutEnable)
     {
         float x = logFToX(static_cast<float>(currentCutoffHz));
-        // LowCut の表示上のY座標は gainDb に準ずる
-        float y = gainToY(static_cast<float>(currentGainDb));
+        float y = cutPointY(currentCutoffHz);
 
         g.setColour(selectedBandIdx == 0 ? juce::Colours::white : pal.lowcut);
         g.fillEllipse(x - 6.0f, y - 6.0f, 12.0f, 12.0f);
@@ -616,7 +687,7 @@ void FreqResponseDisplay::drawEQPoints(juce::Graphics& g)
     if (currentHighCutEnable)
     {
         float x = logFToX(static_cast<float>(currentHighCutFreq));
-        float y = gainToY(static_cast<float>(currentHighCutGainDb));
+        float y = cutPointY(currentHighCutFreq);
 
         g.setColour(selectedBandIdx == 1 ? juce::Colours::white : pal.highcut);
         g.fillEllipse(x - 6.0f, y - 6.0f, 12.0f, 12.0f);
@@ -664,7 +735,7 @@ void FreqResponseDisplay::mouseDown(const juce::MouseEvent& e)
     if (currentLowcutEnable)
     {
         float x = logFToX(static_cast<float>(currentCutoffHz));
-        float y = gainToY(static_cast<float>(currentGainDb));
+        float y = cutPointY(currentCutoffHz);
         if (std::hypot(mx - x, my - y) < grabRadius)
         {
             activeDragBand = 0;
@@ -682,7 +753,7 @@ void FreqResponseDisplay::mouseDown(const juce::MouseEvent& e)
     if (currentHighCutEnable)
     {
         float x = logFToX(static_cast<float>(currentHighCutFreq));
-        float y = gainToY(static_cast<float>(currentHighCutGainDb));
+        float y = cutPointY(currentHighCutFreq);
         if (std::hypot(mx - x, my - y) < grabRadius)
         {
             activeDragBand = 1;
@@ -749,16 +820,12 @@ void FreqResponseDisplay::mouseDrag(const juce::MouseEvent& e)
         auto& apvts = processor->apvts;
         float targetFreq = dragFreq;
 
-        if (activeDragBand == 0) // LowCut
+        if (activeDragBand == 0) // LowCut (横ドラッグのみ。カットゲインは廃止)
         {
             targetFreq = std::clamp(dragFreq, 1.0f, 500.0f);
-            float targetGain = std::clamp(dragGain, -10.0f, 0.0f);
 
             auto rangeF = apvts.getParameterRange("cutoffHz");
             apvts.getParameter("cutoffHz")->setValueNotifyingHost(rangeF.convertTo0to1(targetFreq));
-
-            auto rangeG = apvts.getParameterRange("gainDb");
-            apvts.getParameter("gainDb")->setValueNotifyingHost(rangeG.convertTo0to1(targetGain));
         }
         else if (activeDragBand == 1) // HighCut
         {
@@ -862,7 +929,7 @@ void FreqResponseDisplay::mouseDoubleClick(const juce::MouseEvent& e)
     if (currentLowcutEnable)
     {
         float x = logFToX(static_cast<float>(currentCutoffHz));
-        float y = gainToY(static_cast<float>(currentGainDb));
+        float y = cutPointY(currentCutoffHz);
         if (std::hypot(mx - x, my - y) < grabRadius)
         {
             targetBand = 0;
@@ -873,7 +940,7 @@ void FreqResponseDisplay::mouseDoubleClick(const juce::MouseEvent& e)
     if (targetBand == -1 && currentHighCutEnable)
     {
         float x = logFToX(static_cast<float>(currentHighCutFreq));
-        float y = gainToY(static_cast<float>(currentHighCutGainDb));
+        float y = cutPointY(currentHighCutFreq);
         if (std::hypot(mx - x, my - y) < grabRadius)
         {
             targetBand = 1;
@@ -972,7 +1039,7 @@ void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::
     if (currentLowcutEnable)
     {
         float x = logFToX(static_cast<float>(currentCutoffHz));
-        float y = gainToY(static_cast<float>(currentGainDb));
+        float y = cutPointY(currentCutoffHz);
         if (std::hypot(mx - x, my - y) < grabRadius)
         {
             targetBand = 0;
@@ -983,7 +1050,7 @@ void FreqResponseDisplay::mouseWheelMove(const juce::MouseEvent& e, const juce::
     if (targetBand == -1 && currentHighCutEnable)
     {
         float x = logFToX(static_cast<float>(currentHighCutFreq));
-        float y = gainToY(static_cast<float>(currentHighCutGainDb));
+        float y = cutPointY(currentHighCutFreq);
         if (std::hypot(mx - x, my - y) < grabRadius)
         {
             targetBand = 1;

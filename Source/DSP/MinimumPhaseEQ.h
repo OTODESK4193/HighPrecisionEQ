@@ -242,6 +242,10 @@ public:
     // GUIプロット用の全体の振幅応答の算出
     double getMagnitudeForFrequency(double freq) const;
 
+    // GUIプロット用の一括評価版。1回のロックで全ポイントを評価するため、
+    // 描画中にパラメータ更新が割り込んでカーブが途中で切り替わる (裂ける) ことがない
+    void getMagnitudeCurve(const double* freqs, double* outMags, int numPoints) const;
+
 private:
     // 固定スロット配置:
     //   0        : LowCut 1次セクション

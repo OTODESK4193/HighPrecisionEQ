@@ -292,10 +292,10 @@ void HighPrecisionEQAudioProcessorEditor::selectBand(SelectedBand band)
     slopeLabel.setVisible(isCut);
     qSlider.setVisible(!isCut);
     qLabel.setVisible(!isCut);
-    
-    // HighCut のときも Gain が有効になるので、gainSlider は常に表示
-    gainSlider.setVisible(true);
-    gainLabel.setVisible(true);
+
+    // カット系のGainパラメータは実効がないため、GainノブはBell選択時のみ表示
+    gainSlider.setVisible(!isCut);
+    gainLabel.setVisible(!isCut);
     
     updateComponentColors();
     
@@ -320,14 +320,12 @@ void HighPrecisionEQAudioProcessorEditor::updateAttachments()
     if (currentBand == SelectedBand::LowCut)
     {
         cutoffAttachment = std::make_unique<SliderAttachment>(processorRef.apvts, "cutoffHz", cutoffSlider);
-        gainAttachment = std::make_unique<SliderAttachment>(processorRef.apvts, "gainDb", gainSlider);
         slopeAttachment = std::make_unique<SliderAttachment>(processorRef.apvts, "slopeDbOct", slopeSlider);
     }
     else if (currentBand == SelectedBand::HighCut)
     {
         cutoffAttachment = std::make_unique<SliderAttachment>(processorRef.apvts, "highcut_freq", cutoffSlider);
         slopeAttachment = std::make_unique<SliderAttachment>(processorRef.apvts, "highcut_slope", slopeSlider);
-        gainAttachment = std::make_unique<SliderAttachment>(processorRef.apvts, "highcut_gainDb", gainSlider);
     }
     else
     {
@@ -436,9 +434,14 @@ void HighPrecisionEQAudioProcessorEditor::updateGraph()
     }
 
     // DAWが停止中（processBlockが呼ばれない状態）でもEQカーブが即座に反映されるよう、
-    // GUI側からもパラメータの同期を強制的に呼び出してpendingSectionsを最新にする
-    processorRef.getEQ().updateParameters(lcCutoff, lcOrder, lcEnable, lcGain,
-                                          hcFreq, hcOrder, hcEnable, hcGain,
+    // GUI側からもパラメータの同期を強制的に呼び出す。
+    // 注意: DSPに渡す次数は processBlock と完全に同じ計算 (slope/6) にすること。
+    // 以前ここで slope/12 を渡していたため、オーディオスレッドと交互に異なる
+    // ターゲットを押し合い、カーブ表示と実フィルタが毎ブロック入れ替わるバグがあった。
+    int lcOrderEq = std::clamp(static_cast<int>(std::round(lcSlope / 6.0f)), 1, 16);
+    int hcOrderEq = std::clamp(static_cast<int>(std::round(hcSlope / 6.0f)), 1, 16);
+    processorRef.getEQ().updateParameters(lcCutoff, lcOrderEq, lcEnable, lcGain,
+                                          hcFreq, hcOrderEq, hcEnable, hcGain,
                                           eqBells);
 
     freqDisplay.updateParameters(lcCutoff, lcOrder, lcGain, lcEnable,

@@ -155,15 +155,16 @@ void MinimumPhaseEQ::updateParameters(double lowCutFreq, int lowCutOrder, bool l
     t.hcEnable = highCutEnable;
     t.bells = bells;
 
-    // 変更検出: 無変更なら完全にゼロコストで戻る (毎ブロック呼ばれるため重要)
-    if (hasLastPushed && t == lastPushed)
-        return;
-
-    lastPushed = t;
-    hasLastPushed = true;
-
+    // 変更検出: 無変更ならゼロコストで戻る (毎ブロック呼ばれるため重要)
+    // GUIスレッド(updateGraph)とオーディオスレッド(processBlock)の両方から
+    // 呼ばれるため、検出も含めて paramLock で直列化する
     {
         const juce::CriticalSection::ScopedLockType sl(paramLock);
+        if (hasLastPushed && t == lastPushed)
+            return;
+
+        lastPushed = t;
+        hasLastPushed = true;
         uiTargets = t;
         targetsChanged = true;
     }
@@ -530,4 +531,20 @@ double MinimumPhaseEQ::getMagnitudeForFrequency(double freq) const
             mag *= sec.getMagnitudeForFrequency(freq, currentSampleRate);
     }
     return mag;
+}
+
+void MinimumPhaseEQ::getMagnitudeCurve(const double* freqs, double* outMags, int numPoints) const
+{
+    const juce::CriticalSection::ScopedLockType sl(displayLock);
+
+    for (int i = 0; i < numPoints; ++i)
+    {
+        double mag = 1.0;
+        for (const auto& sec : displaySections)
+        {
+            if (sec.active && !sec.identity)
+                mag *= sec.getMagnitudeForFrequency(freqs[i], currentSampleRate);
+        }
+        outMags[i] = mag;
+    }
 }
