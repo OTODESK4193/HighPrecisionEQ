@@ -1,11 +1,11 @@
-# LowCut Police
+# LowCutPolice（HighPrecisionEQ）
 ![Release](https://img.shields.io/badge/release-v1.0.0-blue)
 ![License](https://img.shields.io/badge/license-AGPLv3-green)
 ![JUCE](https://img.shields.io/badge/JUCE-8.0.8-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20-lightgrey)
 ![Downloads](https://img.shields.io/github/downloads/OTODESK4193/LowCutPolice/total.svg)
 ##
-<img src="Source/Assets/Screenshot.jpg" width="600">
+<img src="Source/Assets/LowCutPolice.jpg" width="600">
 
 ## Overview
 **LowCutPolice** is a high-performance, professional audio plugin designed to clean up muddy low-end frequencies with absolute precision. It combines a zero-latency minimum-phase IIR filter engine with an ultra-high-resolution analyzer that can display all the way down to **1 Hz** — making the invisible low end visible so you can treat it accurately.
@@ -77,8 +77,8 @@ Click the **Color** button in the header to cycle through 10 carefully curated v
 **IMPORTANT WARNING**: This plugin contains specialized audio features such as "Listen Diff" and "Solo-Sweep". Rapidly sweeping frequencies or adjusting extreme Q values can produce abrupt transients and volume changes. To protect your hearing, ears, speakers, and studio monitors, always ensure you keep your master monitoring volume at a safe level. The developers accept no liability for any damage to equipment or physical injury resulting from the use of this software. Use it at your own risk.
 ---
 ## Installation
-1. Download the latest `LowCutPolice.vst3` from the [Releases](https://github.com/OTODESK4193/LowCutPolice/releases/latest) page.
-2. Move the compiled `LowCutPolice.vst3` file to your system VST3 plugin folder:
+1. Download the latest `HighPrecisionEQ.vst3` from the [Releases](https://github.com/OTODESK4193/HighPrecisionEQ/releases/latest) page.
+2. Move the compiled `HighPrecisionEQ.vst3` file to your system VST3 plugin folder:
    `C:\Program Files\Common Files\VST3`
 3. Rescan plugins in your DAW.
 ---
