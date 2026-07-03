@@ -1,134 +1,186 @@
-# LowCut Police User Manual
+# LowCut Police — User Manual (English)
 
-A professional-grade, high-precision high-pass filter and parametric equalizer plugin designed to clean up muddy low-end frequencies while maintaining absolute phase linearity (Zero-Phase).
+**Precision IIR EQ** — a zero-latency, high-precision minimum-phase equalizer with a high-resolution analyzer that can see all the way down to 1 Hz.
+
+Version 1.0.0 / OTODESK
 
 ---
 
 ## Table of Contents
 1.  **Product Overview**
     *   Concept
-    *   Zero-Phase IIR Technology
-2.  **Section & Parameter Guide**
-    *   LowCut (High-Pass) Filter Section
+    *   Minimum-Phase Design & Zero Latency
+    *   "What You Set Is What You Get" Philosophy
+2.  **High-Resolution Analyzer**
+3.  **Sections & Parameters**
+    *   Low Cut (High-Pass) Section
+    *   High Cut (Low-Pass) Section
     *   Bell EQ Section (Bands 1–4)
-    *   Global Controls & Monitor Modes
-3.  **Advanced Monitoring Features**
-    *   Listen Diff (Difference Audition)
-    *   Solo-Sweep (Bandpass Solo)
-4.  **Shortcuts & Control Summary**
-5.  **10 Dynamic Color Palettes**
-6.  **Technical Specifications & Requirements**
+    *   Global Controls / Monitoring
+4.  **Advanced Monitoring Features**
+    *   Listen Diff
+    *   Solo-Sweep
+    *   Peak Hold
+5.  **Shortcuts / Zoom & Navigation**
+6.  **GUI Color Palettes (10 Types)**
+7.  **Technical Specifications & System Requirements**
 
 ---
 
 ## 1. Product Overview
 
 ### Concept
-**LowCut Police** is designed to police and manage muddy low-end frequencies (sub-bass buildup, kick/bass overlaps, microphone rumble, etc.). By cleaning up these problematic regions, LowCut Police ensures you reclaim maximum headroom and punch in your digital mix.
+**LowCut Police** is a precision equalizer built to take full control of the low end of your mix — sub-bass buildup, kick-drum mud, mic rumble and wind noise. It combines an ultra-low-frequency analyzer that displays from 1 Hz, steep low-cut/high-cut filters, and four surgical bell bands, making the invisible low end visible so you can treat it accurately.
 
-LowCut Police is not a generic, all-purpose equalizer. Instead, it is a highly specialized, practical, and razor-sharp professional tool engineered to achieve one single goal: **detecting and eradicating muddy low-end resonances ("Mud") to make the foundation of your mix completely clean.**
+### Minimum-Phase Design & Zero Latency
+Every filter in this plugin (Low Cut / High Cut / Bells) uses a **minimum-phase IIR design**.
 
-### Filter Specification (Linear-Phase & Minimum-Phase Hybrid)
-LowCut Police employs distinct phase topologies depending on the filter type for optimal acoustic results:
-*   **High-Pass Filter (LowCut)**: **Zero-Phase (Linear-Phase / Flat Phase)**.
-*   **4 Bell EQs**: **Minimum-Phase (Standard Biquad)**.
+*   **Latency is 0 samples.** No delay compensation required — safe to insert while tracking or performing live.
+*   **No pre-echo**, by principle. Unlike linear-phase EQs, transients such as kick attacks stay perfectly clean with no reverse smearing before the hit.
+*   The cut filters use a Butterworth cascade with a **hybrid Q arrangement** (reduced Q in the leading sections) that suppresses post-ringing at steep slope settings.
+*   All parameters are continuously smoothed internally, and slope/structure changes are crossfaded over ~10 ms. **No zipper noise or clicks, even under heavy automation.**
 
-### Zero-Phase IIR Technology (LowCut Filter Only)
-When traditional minimum-phase equalizers apply steep high-pass filters, they introduce severe phase shifts around the cutoff frequency. This phase smearing causes sub-bass signals to lose their transient punch and contour.
-
-LowCut Police's high-pass filter utilizes a **bidirectional Overlap-Add (OLA) biquad filter system**. By processing the audio stream both forwards and backwards in time, it cancels out phase distortion mathematically. The result is a perfectly flat, linear phase response (Zero-Phase) that slices away unwanted low-end while preserving the original shape and transient impact of your audio.
-For the parametric Bell equalizers, a standard minimum-phase topology is used to ensure natural time-domain response and punch.
+### "What You Set Is What You Get" Philosophy
+This plugin never silently "corrects" your settings. The frequency, gain and Q you dial in are exactly what goes into the filter coefficients, and the displayed curve always matches the actual processing (measured error below 0.01 dB). When adjacent bands overlap, their curves sum naturally — the same behavior as classic analog and professional EQs.
 
 ---
 
-## 2. Section & Parameter Guide
+## 2. High-Resolution Analyzer
 
-### LowCut (High-Pass) Filter Section
-The primary filter tool for removing sub-frequency noise.
-*   **Cutoff Frequency (Hz)**: Sets the boundary frequency of the cut (Range: 20 Hz to 500 Hz, logarithmic scale).
-*   **Slope (dB/oct)**: Selects the steepness of the filter. Available options are 12, 24, 36, 48, 60, 72, 84, and 96 dB/oct (mapped to 1st to 8th-order SVF cascades).
-*   **Gain (dB)**: Attenuates the depth of the filter (Range: 0 dB to -10 dB).
-*   **Enable (ON/OFF)**: Activates or bypasses the LowCut filter.
+Typical EQ analyzers use FFT (e.g. 4096 points), which limits low-frequency resolution to the bin width — about 10.8 Hz at 44.1 kHz. Below 20 Hz that leaves only 2–3 data points, making the sub region essentially unreadable.
 
-### Bell EQ Section (Bands 1–4)
-Surgical parametric equalizers for notch filtering or corrective frequency boosts.
-*   **Freq (Hz)**: Sets the target center frequency (Range: 20 Hz to 20,000 Hz).
-*   **Gain (dB)**: Sets the boost or cut amount (Range: -18 dB to +18 dB). Ideal for removing resonant mud or boosting high frequencies to compensate for the cut.
-*   **Q**: Sets the bandwidth of the filter (Range: 0.1 to 120.0). Higher Q values create surgical notches for precise frequency isolation.
-*   **Enable (ON/OFF)**: Individually activates or bypasses each Bell band.
+The LowCut Police analyzer is an **800-band analog-style filter bank — no FFT involved**.
 
-### Global Controls & Monitor Modes
-*   **Bypass**: Bypasses the entire plugin (glows red when bypassed).
-*   **Diff (Listen Diff)**: Activates the difference listening mode (glows blue when active). See details below.
-*   **Color**: Cycles through the 10 available GUI color themes.
-*   **Analyze (Display Mode Switcher)**: Changes the visual display:
-    *   `Normal`: EQ response curve layered with a real-time FFT spectrum analyzer.
-    *   `Waveform`: Stereo oscilloscope display (Left: Dry / Right: Wet).
-    *   `Phase`: Phase response visualization (Left: Standard minimum-phase IIR / Right: Ideal Zero-Phase response, combined with a real-time energy spectrum).
+*   **1–60 Hz analyzed in 0.2 Hz steps** (296 bands), 60–200 Hz in 1 Hz steps, and 200 Hz–25 kHz log-spaced, all running continuously.
+*   An 8th-order Butterworth anti-aliasing filter precedes each decimation stage, so mid-band content never folds into the sub region as false spectrum (alias rejection better than -110 dB).
+*   Display levels are calibrated so that a **0 dBFS sine reads 0 dB** (within ±0.25 dB across the entire range).
+*   Each band has ballistics optimized for its frequency: slow and accurate in the lows, fast in the highs.
+*   Multirate processing keeps CPU usage remarkably low for a filter bank of this size (a few percent of one core).
+
+> **Note**: The 1 Hz band takes a second or two to settle. This is a physical limit imposed by the uncertainty principle — no analyzer of any type can avoid it, and an FFT analyzer cannot even resolve 1 Hz in the first place.
 
 ---
 
-## 3. Advanced Monitoring Features
+## 3. Sections & Parameters
 
-### Listen Diff (Difference Audition)
-Turning the "Diff" button ON outputs the latency-aligned difference signal ($Dry - Wet$).
-This allows you to hear **exactly what the plugin is cutting or boosting**.
-*   **Best Practice**: When applying a steep low-cut, use Diff to check if you are accidentally removing musical elements, such as the body of the bassline or the transient weight of a kick drum. If you only hear low-frequency rumble and wind noise, your filter settings are perfect.
+Use the band selector buttons (LC / HC / B1–B4) at the bottom to connect the knobs to a band. Each band's "ON" button toggles it on and off.
 
-### Solo-Sweep (Solo Monitoring)
-Holding the **`Shift` key while clicking or dragging any EQ point** temporarily overrides all processing and applies a narrow bandpass filter around the selected frequency.
-*   **Best Practice**: Sweep the mouse left and right while holding Shift to scan the audio. You can quickly isolate harsh resonances, ringing frequencies, or boxy ranges. Releasing the mouse instantly returns the plugin to its normal state.
+### Low Cut (High-Pass) Section [LC]
+The main filter for removing unwanted low end.
+*   **Frequency (Hz)**: Cutoff frequency (range: **1 Hz – 500 Hz**, logarithmic, default 80 Hz).
+*   **Slope (dB/oct)**: Filter steepness, 8 steps: **12 / 24 / 36 / 48 / 60 / 72 / 84 / 96 dB/oct**.
+*   **Enable (ON/OFF)**: Enables/bypasses the entire low-cut filter.
+
+### High Cut (Low-Pass) Section [HC]
+For cleaning up the top end.
+*   **Frequency (Hz)**: Cutoff frequency (range: **1 Hz – 25,000 Hz**, default 20 kHz).
+*   **Slope (dB/oct)**: 12 – 96 dB/oct in 8 steps.
+*   **Enable (ON/OFF)**: Enables/bypasses the high cut.
+
+### Bell EQ Section (Bands 1–4) [B1–B4]
+Parametric bands for pinpoint cuts and boosts. The bells use an **Orfanidis (analog-matched) design**, so the curve does not cramp near the Nyquist frequency.
+*   **Frequency (Hz)**: Target frequency (range: **10 Hz – 25,000 Hz**).
+*   **Gain (dB)**: Boost/cut amount (range: **-12 dB – +12 dB**).
+*   **Q**: Bandwidth (range: **0.3 – 120.0**). Q=120 allows extremely sharp notches. The response curve is rendered with supersampling, so even the narrowest peak or notch is drawn accurately at its full depth, at any zoom level.
+*   **Enable (ON/OFF)**: Per-band enable/bypass. Toggling never clicks — the gain glides smoothly to/from 0 dB.
+
+### Global Controls / Monitoring
+*   **Bypass**: Bypasses the entire plugin.
+*   **Diff (Listen Diff)**: Delta-listening mode (see below).
+*   **Hold**: Enables the analyzer peak-hold display.
+*   **Color**: Cycles through 10 color palettes.
+*   **Analyze (display mode)**: Each click switches the display:
+    *   `Normal`: EQ response curve + real-time analyzer.
+    *   `Waveform`: Audio waveform display (Dry / Wet).
+    *   `Phase`: Phase response display.
 
 ---
 
-## 4. Shortcuts & Control Summary
+## 4. Advanced Monitoring Features
 
-Boost your workflow with these hardware-accelerated GUI shortcuts:
+### Listen Diff
+Turning "Diff" on outputs **Dry − Wet** — literally **the sound being removed by the equalizer**.
+*   **How to use it**: With a strong low cut engaged, use Diff to check whether the body of the kick or an important bass line is being thrown away along with the rumble. If all you hear in Diff is unwanted noise and mud, your EQ decision is correct. Because the plugin is zero-latency, the difference signal is always sample-accurate.
 
-| Shortcut / Interaction | Action |
+### Solo-Sweep
+While **`Shift`-clicking or `Shift`-dragging** an EQ point, you monitor through a narrow band-pass filter centered on that point.
+*   **How to use it**: Sweep the point left and right to hunt down harsh resonances and boxy frequencies. Release to instantly return to the normal EQ sound, then notch out what you found.
+
+### Peak Hold
+Turning "Hold" on keeps the maximum level of every band displayed as a thin line. Play the whole song through and it will capture momentary low-end peaks and resonances that only appear occasionally. Turning it off resets the hold.
+
+---
+
+## 5. Shortcuts / Zoom & Navigation
+
+### EQ Point Handling
+
+| Action | Result |
 | :--- | :--- |
-| **`Ctrl` + Drag** | **Fine-Tuning**: Knobs or EQ points move at 1/10th speed, allowing surgical adjustments down to **0.1 Hz** accuracy. |
-| **`Alt` + Mousewheel** | **Direct Value Adjust**: Hover over an EQ point or knob and scroll. Changes **Q-factor** for Bell bands, or **Slope (dB/oct)** for the LowCut band. |
-| **Double-Click EQ Point** | **Bypass Toggle**: Double-clicking an EQ point toggles that band ON or OFF instantly. Works on bypassed (ghosted) points as well. |
-| **`Shift` + Click / Drag** | **Solo-Sweep**: Triggers a narrow bandpass solo filter around the selected EQ band. |
-| **Mousewheel (Open Space)** | **Vertical Offset (Normal Mode)**: Adjusts the vertical offset of the background FFT analyzer (±30 dB).<br>**Vertical Zoom (Phase Mode)**: Zooms the phase angle vertical scale. |
+| **Drag** | Changes frequency (and gain, vertically, for bells). LC/HC points sit on the actual curve (at the ~-3 dB point of the cutoff). |
+| **Mouse wheel (over a point)** | Adjusts **Q** on bells, or **Slope** on LC/HC. |
+| **Double-click (on a point)** | Instantly toggles that band on/off. |
+| **`Shift` + click/drag** | Solo-Sweep (see above). |
+
+### Display Zoom / Navigation
+
+| Action | Result |
+| :--- | :--- |
+| **H+ / H− buttons** | Zoom the frequency axis in/out. |
+| **V+ / V− buttons** | Zoom the gain axis in/out (±3 dB to ±48 dB). |
+| **`Ctrl` + mouse wheel** | Zooms the frequency axis **centered on the cursor** — ideal for inspecting the sub region. |
+| **Right-drag** | Horizontal = frequency zoom, vertical = gain zoom. |
+| **Left-drag (empty space)** | Horizontal = pan the view, vertical = shift the analyzer reference level. |
+| **Mouse wheel (empty space)** | Shifts the analyzer reference level (±40 dB). |
+| **Double-click (empty space)** | Resets zoom and display offsets. |
+| **Hover** | Shows frequency and note name at the cursor (e.g. `55.0 Hz / A1`). |
+
+> **Tip**: When zoomed in far, dragging a point below 60 Hz snaps the frequency to a 0.2 Hz grid for precise sub-bass work. You can zoom all the way down to 1 Hz.
 
 ---
 
-## 5. 10 Dynamic Color Palettes
+## 6. GUI Color Palettes (10 Types)
 
-Click the "Color" button to instantly adapt the plugin theme to your environment or DAW. The theme updates the background, grid, curves, analyzer gradient, and control rings:
+Click the "Color" button to instantly restyle the whole UI. Background, grid and analyzer colors change together, and the active control knobs follow automatically.
 
-1.  **Studio Neon**: Saturated cyber-studio palette (Default).
-2.  **Chic Mono**: Sleek, distraction-free monochrome.
-3.  **Vivid Future**: Bright, neon-saturated colors.
-4.  **Warm Retro**: Soft vintage brown and orange tones.
-5.  **Pastel Dream**: Gentle, soothing pastel gradients.
-6.  **Cyberpunk**: Bold neon yellow and glowing pink.
-7.  **Ocean Abyss**: Cool deep-sea blues and greens.
-8.  **Forest Zenith**: Natural forest green tones.
-9.  **Sunset Glow**: Saturated crimson and gold sunset colors.
-10. **Midnight Gold**: Luxury gold-on-black aesthetic.
-
----
-
-## 6. Technical Specifications & Requirements
-
-*   **Platform**: Windows 10 / Windows 11 (64-bit only) - **Exclusively for Windows**
-*   **Tested & Verified DAW**: **Ableton Live 11+ (Fully verified and tested)** / Cubase 12+ / Reaper 6+
-*   **Format**: VST3
-*   **Processing Depth**: 64-bit double precision floating-point DSP
-*   **Latency**: Approx. 480ms (@ 96kHz) via Lookahead buffers (fully compensated by DAW Plugin Delay Compensation).
-    *   **WARNING**: Due to the nature of the bidirectional Overlap-Add (OLA) zero-phase processing, this plugin introduces a massive latency. While modern DAWs automatically compensate for this delay via Plugin Delay Compensation (PDC) during playback, it is absolutely not suitable for live recording or real-time performance. LowCut Police is designed strictly for mixing and mastering scenarios.
-*   **Stability Engineering**:
-    *   **Zero Heap Allocation**: Guaranteed no dynamic memory allocation (`new` or `malloc`) in the real-time audio thread or the background FFT analyzer. Prevents CPU spikes and multithreaded mutex locks.
-    *   **Anti-Explosion DSP**: Active protection against division-by-zero and `NaN` (Not a Number) generation. The plugin remains stable even at extreme Q values or during rapid automation.
+1.  **Studio Neon** — cyber-styled neon colors (default).
+2.  **Chic Mono** — calm, mature monochrome.
+3.  **Vivid Future** — bright futuristic colors.
+4.  **Warm Retro** — warm browns and oranges.
+5.  **Pastel Dream** — soft, easy-on-the-eyes pastels.
+6.  **Cyberpunk** — flashy yellow and pink.
+7.  **Ocean Abyss** — cool deep-sea blue gradients.
+8.  **Forest Zenith** — soothing green earth tones.
+9.  **Sunset Glow** — beautiful orange-to-red gradients.
+10. **Midnight Gold** — luxurious black and gold.
 
 ---
 
-## Disclaimer (Ear & Speaker Protection)
+## 7. Technical Specifications & System Requirements
 
-**IMPORTANT WARNING**: This plugin contains specialized audio features such as "Listen Diff" (difference listening) and "Solo-Sweep" (bandpass solo monitor). Rapidly sweeping frequencies or adjusting extreme Q values can produce abrupt transients and volume spikes.
+*   **OS**: Windows 10 / Windows 11 (64-bit only) — **Windows-only plugin**
+*   **CPU**: **AVX2 required** (Intel Haswell 2013+ / AMD Excavator+, due to SIMD optimization)
+*   **Tested hosts (DAWs)**: **Ableton Live 11+ (verified)** / Cubase 12+ / Reaper 6+
+*   **Formats**: VST3 / Standalone
+*   **Filter design**:
+    *   Cuts: Butterworth cascades built on TPT (Topology-Preserving Transform) SVFs, with a hybrid Q arrangement for reduced ringing
+    *   Bells: Orfanidis (Nyquist-matched) biquads
+*   **Internal precision**: Double precision (64-bit float), stereo processed simultaneously via AVX2 SIMD
+*   **Latency**: **0 samples** (no PDC needed; safe for tracking and live use)
+*   **Analyzer**: 800-band SVF filter bank (non-FFT), 1 Hz – 25 kHz, multirate processing with built-in 8th-order anti-aliasing, calibrated to 0 dBFS sine reference
+*   **Reliability engineering**:
+    *   **No heap allocation** in the audio path or the analyzer thread.
+    *   Lock-free parameter handoff — the audio thread never waits on a lock.
+    *   Full parameter smoothing plus structure-change crossfading: **no clicks or zipper noise under automation** (verified by measurement).
+    *   NaN-prevention guards keep the plugin stable even at extreme Q settings.
+    *   Processing auto-suspends after 1.5 s of silence to save CPU.
 
-**To protect your hearing (ears), speakers, and studio monitors, always ensure you keep your master monitoring volume at a safe level.**
-The developers accept no liability for any equipment damage, hearing loss, or physical injury resulting from the use of this software. Use it entirely at your own risk.
+---
+
+## Disclaimer (Protect Your Speakers and Hearing)
+
+**[WARNING — IMPORTANT]**
+This plugin includes special monitoring features such as Listen Diff and Solo-Sweep. Steep EQ moves or aggressive sweeps at extreme Q settings can cause sudden level changes and high-level transients.
+
+**To protect your hearing and your monitoring equipment, always keep your master monitoring level at a safe volume.**
+The developer and rights holders accept no liability for any equipment damage or physical injury (including hearing loss) resulting from the use of this software. Use entirely at your own risk.
