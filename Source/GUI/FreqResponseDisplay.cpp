@@ -983,9 +983,14 @@ void FreqResponseDisplay::mouseDoubleClick(const juce::MouseEvent& e)
             param->setValueNotifyingHost(currentVal ? 0.0f : 1.0f);
         }
 
-        // トグルした点をそのまま選択状態にする (どの点を操作したか分かるように)
+        // トグルした点をそのまま選択状態にし、表示 (bellParams.active 等) も即時同期する。
+        // (setValueNotifyingHost はパラメータを同期的に確定するので、直後の updateGraph で
+        //  正しい有効/無効状態が反映され、有効化した点をすぐ掴める)
         if (editor != nullptr)
+        {
             editor->selectBand(static_cast<HighPrecisionEQAudioProcessorEditor::SelectedBand>(targetBand));
+            editor->updateGraph();
+        }
     }
     else
     {

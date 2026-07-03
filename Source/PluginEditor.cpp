@@ -59,10 +59,19 @@ HighPrecisionEQAudioProcessorEditor::HighPrecisionEQAudioProcessorEditor(HighPre
         
         enableButtons[i].setClickingTogglesState(true);
         // onStateChange はユーザークリックだけでなく、グラフのダブルクリックや
-        // ホストオートメーション等によるパラメータ変更でも発火する。ここで updateGraph も
-        // 呼ぶことで、有効/無効状態が表示 (bellParams.active 等) に確実に反映される。
-        // (グラフのダブルクリックでOnにしたバンドが掴めない不具合の対策)
-        enableButtons[i].onStateChange = [this]() { updateComponentColors(); updateGraph(); };
+        // ホストオートメーション等によるパラメータ変更でも発火する。
+        // ただし onStateChange は ButtonAttachment がパラメータ本体を書き込む「前」に
+        // 呼ばれることがあり、その場で updateGraph すると古い値を読んで表示 (bellParams.active 等)
+        // が同期しない (有効化した点がゴーストのまま掴めない不具合の原因)。
+        // callAsync でパラメータ確定後に updateGraph を実行して確実に同期させる。
+        enableButtons[i].onStateChange = [this]()
+        {
+            updateComponentColors();
+            juce::MessageManager::callAsync([safe = juce::Component::SafePointer<HighPrecisionEQAudioProcessorEditor>(this)]()
+            {
+                if (safe != nullptr) safe->updateGraph();
+            });
+        };
         addAndMakeVisible(enableButtons[i]);
     }
 
