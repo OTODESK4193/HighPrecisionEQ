@@ -33,6 +33,17 @@ LowCut Police is not a generic, all-purpose equalizer. Instead, it is a highly s
 - **Peak Hold**: Capture momentary low-end peaks and resonances over a full song pass with the **Hold** button.
 - **Deep Zoom**: Zoom the frequency axis down to 1 Hz (H+/H− buttons or Ctrl+wheel). Pan left/right by dragging or scrolling on empty space. Below 60 Hz, point dragging snaps to a 0.2 Hz grid for precise sub-bass work.
 
+#### Why a Filter Bank Instead of FFT?
+
+A standard FFT analyzer and this plugin's filter-bank analyzer solve the spectrum differently. Each has trade-offs:
+
+| | FFT Analyzer | This Plugin (SVF Filter Bank) |
+| :--- | :--- | :--- |
+| **Strengths** | Very light on CPU (`O(N log N)`); a single transform yields the whole spectrum. Well understood and ubiquitous. | Resolution is set per band, so the sub region gets **0.2 Hz steps down to 1 Hz**. Log/perceptual band spacing. No windowing, so no spectral leakage. Per-band analog-style ballistics (attack/release). Calibrated (0 dBFS sine = 0 dB). |
+| **Weaknesses** | Frequency resolution is fixed by bin width (≈10.8 Hz at 4096 pts / 44.1 kHz), so the low end has only a handful of bins — sub-bass is effectively invisible. Linear bins waste resolution up high. Windowing causes spectral leakage, and larger transforms increase time smearing/latency. | Heavier on CPU (hundreds of filters running continuously). Very low bands are inherently **slow to settle** — resolving 1 Hz takes time (a fundamental uncertainty-principle limit, not a bug). More complex to implement and tune. |
+
+In short: FFT is the efficient general-purpose choice, but its fixed bin width makes it poor at the very low frequencies this plugin is built to treat. The filter bank trades CPU for the sub-bass resolution and log-scaled, leakage-free readout that low-end surgery actually needs.
+
 ### 🎛️ Surgical Equalization & Shaping
 - **High-Pass Filter (LowCut)**: Cutoff frequency from 1 Hz to 500 Hz (logarithmic scale) with slope selections of 12, 24, 36, 48, 60, 72, 84, and 96 dB/oct.
 - **Low-Pass Filter (HighCut)**: Cutoff frequency from 1 Hz to 25,000 Hz with the same 12–96 dB/oct slope selections.

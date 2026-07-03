@@ -703,9 +703,10 @@ void FreqResponseDisplay::drawEQPoints(juce::Graphics& g)
         }
         else
         {
-            g.setColour(pal.lowcut.withAlpha(offAlpha));
+            bool sel = (selectedBandIdx == 0);
+            g.setColour(sel ? juce::Colours::white.withAlpha(0.7f) : pal.lowcut.withAlpha(offAlpha));
             g.drawEllipse(x - 6.0f, y - 6.0f, 12.0f, 12.0f, 1.5f);
-            g.setColour(pal.text.withAlpha(offAlpha));
+            g.setColour(pal.text.withAlpha(sel ? 0.9f : offAlpha));
         }
 
         g.setFont(juce::Font(juce::FontOptions("Outfit", 9.0f, juce::Font::bold)));
@@ -727,9 +728,10 @@ void FreqResponseDisplay::drawEQPoints(juce::Graphics& g)
         }
         else
         {
-            g.setColour(pal.highcut.withAlpha(offAlpha));
+            bool sel = (selectedBandIdx == 1);
+            g.setColour(sel ? juce::Colours::white.withAlpha(0.7f) : pal.highcut.withAlpha(offAlpha));
             g.drawEllipse(x - 6.0f, y - 6.0f, 12.0f, 12.0f, 1.5f);
-            g.setColour(pal.text.withAlpha(offAlpha));
+            g.setColour(pal.text.withAlpha(sel ? 0.9f : offAlpha));
         }
 
         g.setFont(juce::Font(juce::FontOptions("Outfit", 9.0f, juce::Font::bold)));
@@ -755,9 +757,10 @@ void FreqResponseDisplay::drawEQPoints(juce::Graphics& g)
         }
         else
         {
-            g.setColour(bellColors[i].withAlpha(offAlpha));
+            bool sel = (selectedBandIdx == (i + 2));
+            g.setColour(sel ? juce::Colours::white.withAlpha(0.7f) : bellColors[i].withAlpha(offAlpha));
             g.drawEllipse(x - 6.0f, y - 6.0f, 12.0f, 12.0f, 1.5f);
-            g.setColour(pal.text.withAlpha(offAlpha));
+            g.setColour(pal.text.withAlpha(sel ? 0.9f : offAlpha));
         }
 
         g.setFont(juce::Font(juce::FontOptions("Outfit", 9.0f, juce::Font::bold)));
@@ -769,21 +772,18 @@ int FreqResponseDisplay::findNearestBand(float mx, float my, float radius, bool 
                                          int preferredBand, float preferredExtra) const
 {
     int best = -1;
-    float bestDist = radius; // radius以内のみ採用
+    float bestDist = 1.0e9f;
 
     auto consider = [&](int band, float x, float y)
     {
         float d = std::hypot(mx - x, my - y);
-        float limit = radius;
-        float eff = d;
-        if (band == preferredBand) // 選択中バンドは掴みやすく優遇
+        // 選択中バンドのみ判定半径を少し広げる (少し外しても掴めるように)。
+        // 比較は必ず実距離で行うため、他の点の真上をクリックしたときは
+        // その点が優先される (選択中の点が近くの点を横取りしない)。
+        float limit = (band == preferredBand) ? radius + preferredExtra : radius;
+        if (d < limit && d < bestDist)
         {
-            limit = radius + preferredExtra;
-            eff = std::max(0.0f, d - preferredExtra);
-        }
-        if (d < limit && eff < bestDist)
-        {
-            bestDist = eff;
+            bestDist = d;
             best = band;
         }
     };
@@ -982,6 +982,10 @@ void FreqResponseDisplay::mouseDoubleClick(const juce::MouseEvent& e)
             bool currentVal = param->getValue() > 0.5f;
             param->setValueNotifyingHost(currentVal ? 0.0f : 1.0f);
         }
+
+        // トグルした点をそのまま選択状態にする (どの点を操作したか分かるように)
+        if (editor != nullptr)
+            editor->selectBand(static_cast<HighPrecisionEQAudioProcessorEditor::SelectedBand>(targetBand));
     }
     else
     {
