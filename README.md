@@ -3,7 +3,7 @@
 ![License](https://img.shields.io/badge/license-AGPLv3-green)
 ![JUCE](https://img.shields.io/badge/JUCE-8.0.8-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20-lightgrey)
-![Downloads](https://img.shields.io/github/downloads/OTODESK4193/LowCutPolice/total.svg)
+![Downloads](https://img.shields.io/github/downloads/OTODESK4193/HighPrecisionEQ/total.svg)
 ##
 <img src="Source/Assets/LowCutPolice.jpg" width="600">
 
